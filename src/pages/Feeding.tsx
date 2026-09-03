@@ -73,7 +73,7 @@ export default function Feeding() {
       <div className="page">
         {!active && (
           <div className="card" style={{ textAlign: 'center' }}>
-            <p style={{ fontWeight: 700, marginBottom: 4 }}>Qual peito ela vai oferecer?</p>
+            <p style={{ fontWeight: 700, marginBottom: 4 }}>Escolha o peito para começar</p>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
               Sugestão baseada na última mamada
             </p>
