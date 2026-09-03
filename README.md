@@ -52,6 +52,10 @@ Stack: React + TypeScript + Vite, Dexie (IndexedDB), Recharts, vite-plugin-pwa.
 O deploy é automático para o GitHub Pages a cada push no branch padrão,
 pelo workflow `.github/workflows/deploy.yml`.
 
+Antes do primeiro deploy é preciso ativar o Pages uma única vez, em
+**Settings > Pages > Build and deployment**, escolhendo **GitHub Actions**
+como "Source" (o token do workflow não tem permissão para criar o site sozinho).
+
 Como o site é servido em um subdiretório (`/my-baby-monitor-/`), esse caminho
 está definido em `base` no `vite.config.ts` — se o repositório for renomeado,
 esse valor precisa ser atualizado junto.

@@ -31,10 +31,9 @@ jobs:
 
       - run: npm run build
 
+      # Requer o Pages ativado uma vez em Settings > Pages,
+      # com "Source" definido como "GitHub Actions".
       - uses: actions/configure-pages@v5
-        with:
-          # Habilita o GitHub Pages automaticamente na primeira execução
-          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
