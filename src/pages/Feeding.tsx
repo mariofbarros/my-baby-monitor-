@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import RangeFilter from '../components/RangeFilter'
 import { db } from '../lib/db'
 import type { Side } from '../lib/types'
+import { clampRangeToData } from '../lib/ranges'
 import { useRangeFilter } from '../lib/useRangeFilter'
 import { formatClock, formatDateShort, formatDuration, formatDurationLabel } from '../lib/time'
 
@@ -38,6 +39,8 @@ export default function Feeding() {
   const totalSeconds = rows.reduce((sum, f) => sum + f.durationSeconds, 0)
   const leftCount = rows.filter((f) => f.side === 'left').length
   const rightCount = rows.length - leftCount
+  // Em "Máximo" o período começa na mamada mais antiga (a lista está em ordem decrescente).
+  const view = clampRangeToData(range, rows.at(-1)?.startTime)
 
   async function startFeeding(side: Side) {
     await db.activeFeeding.put({ id: 1, side, startTime: Date.now() })
@@ -137,6 +140,7 @@ export default function Feeding() {
             <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 14 }}>
               <span style={{ color: 'var(--left)', fontWeight: 700 }}>{leftCount}</span> no esquerdo ·{' '}
               <span style={{ color: 'var(--right)', fontWeight: 700 }}>{rightCount}</span> no direito
+              {view.days > 1 && ` · ${(rows.length / view.days).toFixed(1)} por dia`}
             </p>
           </div>
         )}

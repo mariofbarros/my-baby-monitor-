@@ -1,9 +1,20 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import RangeFilter from '../components/RangeFilter'
 import { db } from '../lib/db'
-import { bucketKeyOf, buildBuckets } from '../lib/ranges'
+import { bucketKeyOf, buildBuckets, clampRangeToData, granularityOf, GRANULARITY_LABEL } from '../lib/ranges'
 import { useRangeFilter } from '../lib/useRangeFilter'
 import { ageLabel, formatDuration, formatDurationLabel, formatTimeAgo } from '../lib/time'
 
@@ -30,19 +41,29 @@ export default function Dashboard() {
     [],
   )
 
-  const buckets = buildBuckets(range)
+  // "Máximo" começa no registro mais antigo que existir entre mamadas e fraldas.
+  let earliest = Infinity
+  for (const f of feedings ?? []) earliest = Math.min(earliest, f.startTime)
+  for (const d of diapers ?? []) earliest = Math.min(earliest, d.timestamp)
+  const view = clampRangeToData(range, Number.isFinite(earliest) ? earliest : undefined)
+
+  const buckets = buildBuckets(view)
+  const granularity = granularityOf(view)
+  const grouping = GRANULARITY_LABEL[granularity]
+  // Com dezenas de barras finas (semana/mês) uma linha lê muito melhor num celular.
+  const asLine = granularity === 'week' || granularity === 'month'
 
   const feedingChart = buckets.map((b) => ({ ...b, mamadas: 0 }))
   const feedingByKey = new Map(feedingChart.map((b) => [b.key, b]))
   for (const f of feedings ?? []) {
-    const bucket = feedingByKey.get(bucketKeyOf(range, f.startTime))
+    const bucket = feedingByKey.get(bucketKeyOf(view, f.startTime))
     if (bucket) bucket.mamadas++
   }
 
   const diaperChart = buckets.map((b) => ({ ...b, xixi: 0, coco: 0, ambos: 0 }))
   const diaperByKey = new Map(diaperChart.map((b) => [b.key, b]))
   for (const d of diapers ?? []) {
-    const bucket = diaperByKey.get(bucketKeyOf(range, d.timestamp))
+    const bucket = diaperByKey.get(bucketKeyOf(view, d.timestamp))
     if (!bucket) continue
     if (d.type === 'pee') bucket.xixi++
     else if (d.type === 'poop') bucket.coco++
@@ -55,7 +76,8 @@ export default function Dashboard() {
   const diaperCount = diapers?.length ?? 0
   const peeCount = (diapers ?? []).filter((d) => d.type === 'pee' || d.type === 'both').length
   const poopCount = (diapers ?? []).filter((d) => d.type === 'poop' || d.type === 'both').length
-  const isMultiDay = range.days > 1
+  const hasBothType = (diapers ?? []).some((d) => d.type === 'both')
+  const isMultiDay = view.days > 1
 
   const now = Date.now()
   const hoursSinceFeeding = latestFeeding ? (now - latestFeeding.startTime) / 3_600_000 : null
@@ -204,38 +226,78 @@ export default function Dashboard() {
           </div>
           {isMultiDay && (feedingCount > 0 || diaperCount > 0) && (
             <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 14 }}>
-              Média por dia: {(feedingCount / range.days).toFixed(1)} mamadas ·{' '}
-              {(diaperCount / range.days).toFixed(1)} fraldas
+              Média por dia: {(feedingCount / view.days).toFixed(1)} mamadas ·{' '}
+              {(diaperCount / view.days).toFixed(1)} fraldas
+              {range.id === 'all' && ` · ${view.days} dias de registros`}
             </p>
           )}
         </div>
 
-        <p className="section-title">Mamadas · {range.label.toLowerCase()}</p>
+        <p className="section-title" style={{ marginBottom: 2 }}>
+          Mamadas · {range.label.toLowerCase()}
+        </p>
+        <p className="chart-note">{grouping}</p>
         <div className="card" style={{ height: 180, padding: '16px 8px' }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={feedingChart}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="label" fontSize={11} stroke="var(--text-muted)" interval="preserveStartEnd" minTickGap={8} />
-              <YAxis fontSize={11} stroke="var(--text-muted)" allowDecimals={false} />
-              <Tooltip />
-              <Bar dataKey="mamadas" fill="var(--accent)" radius={[4, 4, 0, 0]} name="Mamadas" />
-            </BarChart>
+            {asLine ? (
+              <LineChart data={feedingChart}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="label" fontSize={11} stroke="var(--text-muted)" interval="preserveStartEnd" minTickGap={8} />
+                <YAxis fontSize={11} stroke="var(--text-muted)" allowDecimals={false} />
+                <Tooltip />
+                <Line
+                  type="monotone"
+                  dataKey="mamadas"
+                  name="Mamadas"
+                  stroke="var(--accent)"
+                  strokeWidth={2}
+                  dot={{ r: 2.5 }}
+                  activeDot={{ r: 4 }}
+                />
+              </LineChart>
+            ) : (
+              <BarChart data={feedingChart}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="label" fontSize={11} stroke="var(--text-muted)" interval="preserveStartEnd" minTickGap={8} />
+                <YAxis fontSize={11} stroke="var(--text-muted)" allowDecimals={false} />
+                <Tooltip />
+                <Bar dataKey="mamadas" fill="var(--accent)" radius={[4, 4, 0, 0]} name="Mamadas" />
+              </BarChart>
+            )}
           </ResponsiveContainer>
         </div>
 
-        <p className="section-title">Fraldas · {range.label.toLowerCase()}</p>
+        <p className="section-title" style={{ marginBottom: 2 }}>
+          Fraldas · {range.label.toLowerCase()}
+        </p>
+        <p className="chart-note">{grouping}</p>
         <div className="card" style={{ height: 180, padding: '16px 8px' }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={diaperChart}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="label" fontSize={11} stroke="var(--text-muted)" interval="preserveStartEnd" minTickGap={8} />
-              <YAxis fontSize={11} stroke="var(--text-muted)" allowDecimals={false} />
-              <Tooltip />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="xixi" stackId="a" fill="var(--pee)" name="Xixi" />
-              <Bar dataKey="coco" stackId="a" fill="var(--poop)" name="Cocô" />
-              <Bar dataKey="ambos" stackId="a" fill="var(--accent)" name="Ambos" radius={[4, 4, 0, 0]} />
-            </BarChart>
+            {asLine ? (
+              <LineChart data={diaperChart}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="label" fontSize={11} stroke="var(--text-muted)" interval="preserveStartEnd" minTickGap={8} />
+                <YAxis fontSize={11} stroke="var(--text-muted)" allowDecimals={false} />
+                <Tooltip />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Line type="monotone" dataKey="xixi" name="Xixi" stroke="var(--pee)" strokeWidth={2} dot={{ r: 2.5 }} activeDot={{ r: 4 }} />
+                <Line type="monotone" dataKey="coco" name="Cocô" stroke="var(--poop)" strokeWidth={2} dot={{ r: 2.5 }} activeDot={{ r: 4 }} />
+                {hasBothType && (
+                  <Line type="monotone" dataKey="ambos" name="Ambos" stroke="var(--accent)" strokeWidth={2} dot={{ r: 2.5 }} activeDot={{ r: 4 }} />
+                )}
+              </LineChart>
+            ) : (
+              <BarChart data={diaperChart}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="label" fontSize={11} stroke="var(--text-muted)" interval="preserveStartEnd" minTickGap={8} />
+                <YAxis fontSize={11} stroke="var(--text-muted)" allowDecimals={false} />
+                <Tooltip />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Bar dataKey="xixi" stackId="a" fill="var(--pee)" name="Xixi" />
+                <Bar dataKey="coco" stackId="a" fill="var(--poop)" name="Cocô" />
+                <Bar dataKey="ambos" stackId="a" fill="var(--accent)" name="Ambos" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            )}
           </ResponsiveContainer>
         </div>
       </div>

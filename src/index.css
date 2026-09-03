@@ -263,6 +263,12 @@ label {
   margin-top: 0;
 }
 
+.chart-note {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0 0 8px;
+}
+
 .chip-row {
   display: flex;
   gap: 8px;

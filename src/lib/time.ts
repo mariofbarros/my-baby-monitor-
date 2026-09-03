@@ -15,6 +15,9 @@ export function formatDurationLabel(totalSeconds: number): string {
   if (minutes < 60) return `${minutes}min`
   const h = Math.floor(minutes / 60)
   const m = minutes % 60
+  // A partir de três dígitos os minutos não cabem numa coluna do resumo,
+  // e num total dessa ordem eles não acrescentam nada.
+  if (h >= 100) return `${h}h`
   return m > 0 ? `${h}h ${m}min` : `${h}h`
 }
 

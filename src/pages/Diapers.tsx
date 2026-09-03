@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import RangeFilter from '../components/RangeFilter'
 import { db } from '../lib/db'
 import type { DiaperType } from '../lib/types'
+import { clampRangeToData } from '../lib/ranges'
 import { useRangeFilter } from '../lib/useRangeFilter'
 import { formatClock, formatDateShort, formatTimeAgo } from '../lib/time'
 import { DropIcon } from '../components/Icons'
@@ -40,6 +41,8 @@ export default function Diapers() {
   const rows = (diapers ?? []).slice().sort((a, b) => b.timestamp - a.timestamp)
   const peeCount = rows.filter((d) => d.type === 'pee' || d.type === 'both').length
   const poopCount = rows.filter((d) => d.type === 'poop' || d.type === 'both').length
+  // Em "Máximo" o período começa na troca mais antiga (a lista está em ordem decrescente).
+  const view = clampRangeToData(range, rows.at(-1)?.timestamp)
 
   async function logDiaper(type: DiaperType) {
     await db.diapers.add({ type, timestamp: Date.now() })
@@ -106,9 +109,10 @@ export default function Diapers() {
                 <p className="summary-label">com cocô</p>
               </div>
             </div>
-            {range.days > 1 && (
+            {view.days > 1 && (
               <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 14 }}>
-                Média por dia: {(rows.length / range.days).toFixed(1)} trocas
+                Média por dia: {(rows.length / view.days).toFixed(1)} trocas
+                {range.id === 'all' && ` · ${view.days} dias de registros`}
               </p>
             )}
           </div>
