@@ -3,6 +3,8 @@
 Aplicação web (PWA) para acompanhar a rotina e a saúde de um recém-nascido:
 mamadas, trocas de fralda e crescimento, com um dashboard para visualizar padrões.
 
+**No ar em:** https://mariofbarros.github.io/my-baby-monitor-/
+
 Funciona no navegador do celular e pode ser instalada na tela inicial do Android
 ("Adicionar à tela inicial"), comportando-se como um app nativo, inclusive offline.
 
@@ -44,3 +46,12 @@ npm run preview  # serve o build de produção
 ```
 
 Stack: React + TypeScript + Vite, Dexie (IndexedDB), Recharts, vite-plugin-pwa.
+
+## Deploy
+
+O deploy é automático para o GitHub Pages a cada push no branch padrão,
+pelo workflow `.github/workflows/deploy.yml`.
+
+Como o site é servido em um subdiretório (`/my-baby-monitor-/`), esse caminho
+está definido em `base` no `vite.config.ts` — se o repositório for renomeado,
+esse valor precisa ser atualizado junto.
