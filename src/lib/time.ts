@@ -8,6 +8,16 @@ export function formatDuration(totalSeconds: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
+/** Duração compacta para resumos: "2h 15min", "45min", "30s". */
+export function formatDurationLabel(totalSeconds: number): string {
+  if (totalSeconds < 60) return `${Math.round(totalSeconds)}s`
+  const minutes = Math.round(totalSeconds / 60)
+  if (minutes < 60) return `${minutes}min`
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return m > 0 ? `${h}h ${m}min` : `${h}h`
+}
+
 export function formatTimeAgo(epochMs: number): string {
   const diffSeconds = Math.max(0, Math.floor((Date.now() - epochMs) / 1000))
   if (diffSeconds < 60) return 'agora mesmo'

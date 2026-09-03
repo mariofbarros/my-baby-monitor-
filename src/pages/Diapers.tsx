@@ -1,8 +1,12 @@
 import { useLiveQuery } from 'dexie-react-hooks'
+import RangeFilter from '../components/RangeFilter'
 import { db } from '../lib/db'
 import type { DiaperType } from '../lib/types'
+import { useRangeFilter } from '../lib/useRangeFilter'
 import { formatClock, formatDateShort, formatTimeAgo } from '../lib/time'
 import { DropIcon } from '../components/Icons'
+
+const MAX_ROWS = 100
 
 const TYPE_LABEL: Record<DiaperType, string> = {
   pee: 'Xixi',
@@ -23,8 +27,19 @@ const TYPE_BG: Record<DiaperType, string> = {
 }
 
 export default function Diapers() {
-  const diapers = useLiveQuery(() => db.diapers.orderBy('timestamp').reverse().limit(30).toArray(), [], [])
-  const last = diapers?.[0]
+  const { rangeId, setRangeId, range } = useRangeFilter('range:diapers')
+
+  // A última troca é sempre a mais recente de todas, independente do filtro.
+  const latestDiaper = useLiveQuery(() => db.diapers.orderBy('timestamp').last())
+  const diapers = useLiveQuery(
+    () => db.diapers.where('timestamp').between(range.start, range.end, true, false).toArray(),
+    [range.start, range.end],
+    [],
+  )
+
+  const rows = (diapers ?? []).slice().sort((a, b) => b.timestamp - a.timestamp)
+  const peeCount = rows.filter((d) => d.type === 'pee' || d.type === 'both').length
+  const poopCount = rows.filter((d) => d.type === 'poop' || d.type === 'both').length
 
   async function logDiaper(type: DiaperType) {
     await db.diapers.add({ type, timestamp: Date.now() })
@@ -44,7 +59,7 @@ export default function Diapers() {
         <div className="card" style={{ textAlign: 'center' }}>
           <p style={{ fontWeight: 700, marginBottom: 4 }}>Registrar troca</p>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-            {last ? `Última troca ${formatTimeAgo(last.timestamp)}` : 'Nenhuma troca registrada ainda'}
+            {latestDiaper ? `Última troca ${formatTimeAgo(latestDiaper.timestamp)}` : 'Nenhuma troca registrada ainda'}
           </p>
           <div style={{ display: 'flex', gap: 10 }}>
             {(['pee', 'poop', 'both'] as DiaperType[]).map((type) => (
@@ -69,10 +84,41 @@ export default function Diapers() {
         </div>
 
         <p className="section-title">Histórico</p>
-        {!diapers?.length && <p className="empty-state">Nenhuma troca registrada ainda.</p>}
-        {!!diapers?.length && (
+        <RangeFilter value={rangeId} onChange={setRangeId} />
+
+        {rows.length > 0 && (
+          <div className="card" style={{ marginBottom: 12 }}>
+            <div className="summary-grid">
+              <div>
+                <p className="summary-value">{rows.length}</p>
+                <p className="summary-label">trocas</p>
+              </div>
+              <div>
+                <p className="summary-value" style={{ color: 'var(--pee)' }}>
+                  {peeCount}
+                </p>
+                <p className="summary-label">com xixi</p>
+              </div>
+              <div>
+                <p className="summary-value" style={{ color: 'var(--poop)' }}>
+                  {poopCount}
+                </p>
+                <p className="summary-label">com cocô</p>
+              </div>
+            </div>
+            {range.days > 1 && (
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 14 }}>
+                Média por dia: {(rows.length / range.days).toFixed(1)} trocas
+              </p>
+            )}
+          </div>
+        )}
+
+        {rows.length === 0 && <p className="empty-state">Nenhuma troca em {range.label.toLowerCase()}.</p>}
+
+        {rows.length > 0 && (
           <div className="card">
-            {diapers.map((d) => (
+            {rows.slice(0, MAX_ROWS).map((d) => (
               <div className="list-item" key={d.id}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span className="badge" style={{ background: TYPE_BG[d.type], color: TYPE_COLOR[d.type] }}>
@@ -93,6 +139,12 @@ export default function Diapers() {
               </div>
             ))}
           </div>
+        )}
+
+        {rows.length > MAX_ROWS && (
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', marginTop: 10 }}>
+            Mostrando as {MAX_ROWS} mais recentes de {rows.length}.
+          </p>
         )}
       </div>
     </div>

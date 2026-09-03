@@ -1,62 +1,65 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import RangeFilter from '../components/RangeFilter'
 import { db } from '../lib/db'
-import { ageLabel, formatDateShort, formatDuration, formatTimeAgo } from '../lib/time'
+import { bucketKeyOf, buildBuckets } from '../lib/ranges'
+import { useRangeFilter } from '../lib/useRangeFilter'
+import { ageLabel, formatDuration, formatDurationLabel, formatTimeAgo } from '../lib/time'
 
-const DAY_MS = 86_400_000
 const FEEDING_ALERT_HOURS = 4
 const DIAPER_ALERT_HOURS = 6
 
-function dayKey(epochMs: number) {
-  const d = new Date(epochMs)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
 export default function Dashboard() {
+  const { rangeId, setRangeId, range } = useRangeFilter('range:dashboard')
+
   const profile = useLiveQuery(() => db.profile.get(1))
   const activeFeeding = useLiveQuery(() => db.activeFeeding.get(1))
-  const feedings = useLiveQuery(() => db.feedings.orderBy('startTime').reverse().toArray(), [], [])
-  const diapers = useLiveQuery(() => db.diapers.orderBy('timestamp').reverse().toArray(), [], [])
-  const measurements = useLiveQuery(() => db.measurements.orderBy('date').reverse().limit(1).toArray(), [], [])
+  const latestFeeding = useLiveQuery(() => db.feedings.orderBy('startTime').last())
+  const latestDiaper = useLiveQuery(() => db.diapers.orderBy('timestamp').last())
+  const latestMeasurement = useLiveQuery(() => db.measurements.orderBy('date').last())
 
-  const lastFeeding = feedings?.[0]
-  const lastDiaper = diapers?.[0]
-  const latestMeasurement = measurements?.[0]
+  const feedings = useLiveQuery(
+    () => db.feedings.where('startTime').between(range.start, range.end, true, false).toArray(),
+    [range.start, range.end],
+    [],
+  )
+  const diapers = useLiveQuery(
+    () => db.diapers.where('timestamp').between(range.start, range.end, true, false).toArray(),
+    [range.start, range.end],
+    [],
+  )
 
-  const now = Date.now()
-  const since7d = now - 7 * DAY_MS
-  const todayKey = dayKey(now)
+  const buckets = buildBuckets(range)
 
-  const feedingsToday = (feedings ?? []).filter((f) => dayKey(f.startTime) === todayKey)
-  const diapersToday = (diapers ?? []).filter((d) => dayKey(d.timestamp) === todayKey)
-
-  const days: string[] = []
-  for (let i = 6; i >= 0; i--) {
-    days.push(dayKey(now - i * DAY_MS))
+  const feedingChart = buckets.map((b) => ({ ...b, mamadas: 0 }))
+  const feedingByKey = new Map(feedingChart.map((b) => [b.key, b]))
+  for (const f of feedings ?? []) {
+    const bucket = feedingByKey.get(bucketKeyOf(range, f.startTime))
+    if (bucket) bucket.mamadas++
   }
 
-  const feedingChart = days.map((key) => {
-    const items = (feedings ?? []).filter((f) => f.startTime >= since7d && dayKey(f.startTime) === key)
-    return {
-      day: key,
-      mamadas: items.length,
-      minutos: Math.round(items.reduce((sum, f) => sum + f.durationSeconds, 0) / 60),
-    }
-  })
+  const diaperChart = buckets.map((b) => ({ ...b, xixi: 0, coco: 0, ambos: 0 }))
+  const diaperByKey = new Map(diaperChart.map((b) => [b.key, b]))
+  for (const d of diapers ?? []) {
+    const bucket = diaperByKey.get(bucketKeyOf(range, d.timestamp))
+    if (!bucket) continue
+    if (d.type === 'pee') bucket.xixi++
+    else if (d.type === 'poop') bucket.coco++
+    else bucket.ambos++
+  }
 
-  const diaperChart = days.map((key) => {
-    const items = (diapers ?? []).filter((d) => d.timestamp >= since7d && dayKey(d.timestamp) === key)
-    return {
-      day: key,
-      xixi: items.filter((d) => d.type === 'pee').length,
-      coco: items.filter((d) => d.type === 'poop').length,
-      ambos: items.filter((d) => d.type === 'both').length,
-    }
-  })
+  const feedingCount = feedings?.length ?? 0
+  const totalSeconds = (feedings ?? []).reduce((sum, f) => sum + f.durationSeconds, 0)
+  const avgSeconds = feedingCount > 0 ? totalSeconds / feedingCount : 0
+  const diaperCount = diapers?.length ?? 0
+  const peeCount = (diapers ?? []).filter((d) => d.type === 'pee' || d.type === 'both').length
+  const poopCount = (diapers ?? []).filter((d) => d.type === 'poop' || d.type === 'both').length
+  const isMultiDay = range.days > 1
 
-  const hoursSinceFeeding = lastFeeding ? (now - lastFeeding.startTime) / 3_600_000 : null
-  const hoursSinceDiaper = lastDiaper ? (now - lastDiaper.timestamp) / 3_600_000 : null
+  const now = Date.now()
+  const hoursSinceFeeding = latestFeeding ? (now - latestFeeding.startTime) / 3_600_000 : null
+  const hoursSinceDiaper = latestDiaper ? (now - latestDiaper.timestamp) / 3_600_000 : null
 
   const alerts: string[] = []
   if (!activeFeeding && hoursSinceFeeding !== null && hoursSinceFeeding >= FEEDING_ALERT_HOURS) {
@@ -65,6 +68,8 @@ export default function Dashboard() {
   if (hoursSinceDiaper !== null && hoursSinceDiaper >= DIAPER_ALERT_HOURS) {
     alerts.push(`Já se passaram mais de ${DIAPER_ALERT_HOURS}h desde a última troca de fralda.`)
   }
+
+  const nextSide = latestFeeding?.side === 'left' ? 'Direito' : 'Esquerdo'
 
   return (
     <div>
@@ -98,38 +103,53 @@ export default function Dashboard() {
           <Link to="/feeding" className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Última mamada</p>
             {activeFeeding ? (
-              <p style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent)' }}>Em andamento</p>
-            ) : lastFeeding ? (
+              <p style={{ fontSize: 18, fontWeight: 700, color: 'var(--accent)' }}>Em andamento</p>
+            ) : latestFeeding ? (
               <>
-                <p style={{ fontSize: 20, fontWeight: 700 }}>{formatTimeAgo(lastFeeding.startTime)}</p>
+                <p style={{ fontSize: 20, fontWeight: 700 }}>{formatTimeAgo(latestFeeding.startTime)}</p>
                 <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  {lastFeeding.side === 'left' ? 'Esquerdo' : 'Direito'} · {formatDuration(lastFeeding.durationSeconds)}
+                  {latestFeeding.side === 'left' ? 'Esquerdo' : 'Direito'} ·{' '}
+                  {formatDuration(latestFeeding.durationSeconds)}
                 </p>
               </>
             ) : (
               <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>Sem registros</p>
+            )}
+          </Link>
+
+          <Link to="/feeding" className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Próximo peito</p>
+            {latestFeeding ? (
+              <>
+                <p
+                  style={{
+                    fontSize: 20,
+                    fontWeight: 700,
+                    color: nextSide === 'Esquerdo' ? 'var(--left)' : 'var(--right)',
+                  }}
+                >
+                  {nextSide}
+                </p>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Alternando o lado</p>
+              </>
+            ) : (
+              <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>Qualquer um</p>
             )}
           </Link>
 
           <Link to="/diapers" className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Última fralda</p>
-            {lastDiaper ? (
+            {latestDiaper ? (
               <>
-                <p style={{ fontSize: 20, fontWeight: 700 }}>{formatTimeAgo(lastDiaper.timestamp)}</p>
+                <p style={{ fontSize: 20, fontWeight: 700 }}>{formatTimeAgo(latestDiaper.timestamp)}</p>
                 <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  {lastDiaper.type === 'pee' ? 'Xixi' : lastDiaper.type === 'poop' ? 'Cocô' : 'Ambos'}
+                  {latestDiaper.type === 'pee' ? 'Xixi' : latestDiaper.type === 'poop' ? 'Cocô' : 'Ambos'}
                 </p>
               </>
             ) : (
               <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>Sem registros</p>
             )}
           </Link>
-
-          <div className="card">
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Hoje</p>
-            <p style={{ fontSize: 20, fontWeight: 700 }}>{feedingsToday.length} mamadas</p>
-            <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{diapersToday.length} fraldas</p>
-          </div>
 
           <Link to="/growth" className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Última medição</p>
@@ -148,31 +168,73 @@ export default function Dashboard() {
           </Link>
         </div>
 
-        <p className="section-title">Mamadas (últimos 7 dias)</p>
+        <p className="section-title">Período</p>
+        <RangeFilter value={rangeId} onChange={setRangeId} />
+
+        <div className="card">
+          <div className="summary-grid">
+            <div>
+              <p className="summary-value">{feedingCount}</p>
+              <p className="summary-label">mamadas</p>
+            </div>
+            <div>
+              <p className="summary-value">{formatDurationLabel(totalSeconds)}</p>
+              <p className="summary-label">tempo total</p>
+            </div>
+            <div>
+              <p className="summary-value">{feedingCount > 0 ? formatDurationLabel(avgSeconds) : '—'}</p>
+              <p className="summary-label">média por mamada</p>
+            </div>
+            <div>
+              <p className="summary-value">{diaperCount}</p>
+              <p className="summary-label">fraldas</p>
+            </div>
+            <div>
+              <p className="summary-value" style={{ color: 'var(--pee)' }}>
+                {peeCount}
+              </p>
+              <p className="summary-label">xixi</p>
+            </div>
+            <div>
+              <p className="summary-value" style={{ color: 'var(--poop)' }}>
+                {poopCount}
+              </p>
+              <p className="summary-label">cocô</p>
+            </div>
+          </div>
+          {isMultiDay && (feedingCount > 0 || diaperCount > 0) && (
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 14 }}>
+              Média por dia: {(feedingCount / range.days).toFixed(1)} mamadas ·{' '}
+              {(diaperCount / range.days).toFixed(1)} fraldas
+            </p>
+          )}
+        </div>
+
+        <p className="section-title">Mamadas · {range.label.toLowerCase()}</p>
         <div className="card" style={{ height: 180, padding: '16px 8px' }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={feedingChart}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="day" tickFormatter={(d) => formatDateShort(new Date(d).getTime())} fontSize={11} stroke="var(--text-muted)" />
+              <XAxis dataKey="label" fontSize={11} stroke="var(--text-muted)" interval="preserveStartEnd" minTickGap={8} />
               <YAxis fontSize={11} stroke="var(--text-muted)" allowDecimals={false} />
-              <Tooltip labelFormatter={(d) => formatDateShort(new Date(String(d)).getTime())} />
-              <Bar dataKey="mamadas" fill="var(--accent)" radius={[4, 4, 0, 0]} />
+              <Tooltip />
+              <Bar dataKey="mamadas" fill="var(--accent)" radius={[4, 4, 0, 0]} name="Mamadas" />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        <p className="section-title">Fraldas (últimos 7 dias)</p>
+        <p className="section-title">Fraldas · {range.label.toLowerCase()}</p>
         <div className="card" style={{ height: 180, padding: '16px 8px' }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={diaperChart}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="day" tickFormatter={(d) => formatDateShort(new Date(d).getTime())} fontSize={11} stroke="var(--text-muted)" />
+              <XAxis dataKey="label" fontSize={11} stroke="var(--text-muted)" interval="preserveStartEnd" minTickGap={8} />
               <YAxis fontSize={11} stroke="var(--text-muted)" allowDecimals={false} />
-              <Tooltip labelFormatter={(d) => formatDateShort(new Date(String(d)).getTime())} />
+              <Tooltip />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="xixi" stackId="a" fill="var(--pee)" name="Xixi" />
-              <Bar dataKey="coco" stackId="a" fill="var(--poop)" name="Cocô" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="ambos" stackId="a" fill="var(--accent)" name="Ambos" />
+              <Bar dataKey="coco" stackId="a" fill="var(--poop)" name="Cocô" />
+              <Bar dataKey="ambos" stackId="a" fill="var(--accent)" name="Ambos" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

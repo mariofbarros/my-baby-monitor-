@@ -1,8 +1,12 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useState } from 'react'
+import RangeFilter from '../components/RangeFilter'
 import { db } from '../lib/db'
 import type { Side } from '../lib/types'
-import { formatClock, formatDateShort, formatDuration } from '../lib/time'
+import { useRangeFilter } from '../lib/useRangeFilter'
+import { formatClock, formatDateShort, formatDuration, formatDurationLabel } from '../lib/time'
+
+const MAX_ROWS = 100
 
 function useNow(active: boolean) {
   const [now, setNow] = useState(() => Date.now())
@@ -15,13 +19,25 @@ function useNow(active: boolean) {
 }
 
 export default function Feeding() {
+  const { rangeId, setRangeId, range } = useRangeFilter('range:feeding')
+
   const active = useLiveQuery(() => db.activeFeeding.get(1))
-  const feedings = useLiveQuery(() => db.feedings.orderBy('startTime').reverse().limit(30).toArray(), [], [])
-  const lastFeeding = feedings?.[0]
+  // A sugestão de lado segue a última mamada registrada, independente do filtro.
+  const latestFeeding = useLiveQuery(() => db.feedings.orderBy('startTime').last())
+  const feedings = useLiveQuery(
+    () => db.feedings.where('startTime').between(range.start, range.end, true, false).toArray(),
+    [range.start, range.end],
+    [],
+  )
 
   const now = useNow(!!active)
 
-  const suggestedSide: Side = lastFeeding?.side === 'left' ? 'right' : 'left'
+  const suggestedSide: Side = latestFeeding?.side === 'left' ? 'right' : 'left'
+
+  const rows = (feedings ?? []).slice().sort((a, b) => b.startTime - a.startTime)
+  const totalSeconds = rows.reduce((sum, f) => sum + f.durationSeconds, 0)
+  const leftCount = rows.filter((f) => f.side === 'left').length
+  const rightCount = rows.length - leftCount
 
   async function startFeeding(side: Side) {
     await db.activeFeeding.put({ id: 1, side, startTime: Date.now() })
@@ -100,10 +116,36 @@ export default function Feeding() {
         )}
 
         <p className="section-title">Histórico</p>
-        {!feedings?.length && <p className="empty-state">Nenhuma mamada registrada ainda.</p>}
-        {!!feedings?.length && (
+        <RangeFilter value={rangeId} onChange={setRangeId} />
+
+        {rows.length > 0 && (
+          <div className="card" style={{ marginBottom: 12 }}>
+            <div className="summary-grid">
+              <div>
+                <p className="summary-value">{rows.length}</p>
+                <p className="summary-label">mamadas</p>
+              </div>
+              <div>
+                <p className="summary-value">{formatDurationLabel(totalSeconds)}</p>
+                <p className="summary-label">tempo total</p>
+              </div>
+              <div>
+                <p className="summary-value">{formatDurationLabel(totalSeconds / rows.length)}</p>
+                <p className="summary-label">média</p>
+              </div>
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 14 }}>
+              <span style={{ color: 'var(--left)', fontWeight: 700 }}>{leftCount}</span> no esquerdo ·{' '}
+              <span style={{ color: 'var(--right)', fontWeight: 700 }}>{rightCount}</span> no direito
+            </p>
+          </div>
+        )}
+
+        {rows.length === 0 && <p className="empty-state">Nenhuma mamada em {range.label.toLowerCase()}.</p>}
+
+        {rows.length > 0 && (
           <div className="card">
-            {feedings.map((f) => (
+            {rows.slice(0, MAX_ROWS).map((f) => (
               <div className="list-item" key={f.id}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span
@@ -133,6 +175,12 @@ export default function Feeding() {
               </div>
             ))}
           </div>
+        )}
+
+        {rows.length > MAX_ROWS && (
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', marginTop: 10 }}>
+            Mostrando as {MAX_ROWS} mais recentes de {rows.length}.
+          </p>
         )}
       </div>
     </div>
