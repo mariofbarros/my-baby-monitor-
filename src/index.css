@@ -68,13 +68,34 @@ body {
 }
 
 #root {
-  min-height: 100svh;
+  height: 100svh;
   display: flex;
   flex-direction: column;
   max-width: 480px;
   margin: 0 auto;
   background: var(--bg);
   position: relative;
+}
+
+/*
+ * The bottom nav must stay pinned to the viewport bottom on every screen,
+ * not just ones with enough content to push it there. #root is locked to
+ * the viewport height, and min-height: 0 down this flex chain lets .page
+ * be the one scrolling region — instead of each screen's own height
+ * deciding where the nav lands.
+ */
+.page-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.page-shell > div {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 h1,
@@ -175,6 +196,7 @@ label {
 }
 
 .app-header {
+  flex-shrink: 0;
   padding: 20px 16px 12px;
   display: flex;
   align-items: center;
@@ -182,6 +204,7 @@ label {
 }
 
 .bottom-nav {
+  flex-shrink: 0;
   position: sticky;
   bottom: 0;
   display: flex;

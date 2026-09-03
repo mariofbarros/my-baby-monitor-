@@ -12,7 +12,9 @@ const NAV_ITEMS = [
 export default function Layout() {
   return (
     <>
-      <Outlet />
+      <div className="page-shell">
+        <Outlet />
+      </div>
       <nav className="bottom-nav">
         {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
           <NavLink
