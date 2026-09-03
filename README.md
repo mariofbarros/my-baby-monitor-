@@ -1,61 +1,67 @@
-# Diário do Bebê
+# Baby Diary
 
-Aplicação web (PWA) para acompanhar a rotina e a saúde de um recém-nascido:
-mamadas, trocas de fralda e crescimento, com um dashboard para visualizar padrões.
+A web app (PWA) for tracking a newborn's routine and health: feedings,
+diaper changes, and growth, with a dashboard to spot patterns.
 
-**No ar em:** https://mariofbarros.github.io/my-baby-monitor-/
+**Live at:** https://mariofbarros.github.io/my-baby-monitor-/
 
-Funciona no navegador do celular e pode ser instalada na tela inicial do Android
-("Adicionar à tela inicial"), comportando-se como um app nativo, inclusive offline.
+Works in a phone browser and can be installed to the Android home screen
+("Add to Home screen"), behaving like a native app, including offline.
 
-## Funcionalidades
+## Features
 
-**Mamadas**
-- Escolha o peito a oferecer (esquerdo ou direito) e o cronômetro inicia na hora
-- Sugestão automática do próximo peito, alternando em relação à última mamada
-- O cronômetro sobrevive a fechar/reabrir o app (o horário de início fica salvo)
-- Histórico com lado, horário e duração de cada mamada
+**Feedings**
+- Pick the breast to offer (left or right) and the timer starts immediately
+- Automatic suggestion for the next breast, alternating from the last feeding
+- The timer survives closing/reopening the app (the start time is saved)
+- History with side, time, and duration of each feeding
 
-**Fraldas**
-- Registro em um toque: xixi, cocô ou ambos
-- Mostra há quanto tempo foi a última troca
-- Histórico com data e horário
+**Diapers**
+- One-tap logging: pee, poop, or both
+- Shows how long it's been since the last change
+- History with date and time
 
-**Crescimento**
-- Registro de peso (kg) e altura (cm) por data
-- Gráficos de evolução de peso e altura
+**Growth**
+- Weight (kg) and height (cm) logged by date
+- Weight and height trend charts
 
 **Dashboard**
-- Resumo do dia: última mamada, última fralda, totais do dia e última medição
-- Gráfico de mamadas por dia (últimos 7 dias)
-- Gráfico de fraldas por dia, separado por tipo (últimos 7 dias)
-- Alertas simples: mais de 4h sem mamar ou mais de 6h sem troca de fralda
+- Daily summary: last feeding, next breast, last diaper change, last measurement
+- Feeding and diaper charts for a selectable time range (today, yesterday, last
+  week, last 15/30/90 days, this month, or all time), grouped by hour, day,
+  week, or month depending on the range
+- Simple alerts: more than 4h without a feeding, or 6h without a diaper change
 
-## Dados
+**Feeding and diaper history**
+- Filterable by the same time ranges as the dashboard, each screen remembering
+  its own choice
+- Period summary (counts, total/average feeding time, breast split, diaper types)
 
-Tudo é salvo localmente no dispositivo (IndexedDB) — nada é enviado para servidores.
-Em "Bebê" há a opção de exportar todos os registros em JSON como backup.
+## Data
 
-## Desenvolvimento
+Everything is stored locally on the device (IndexedDB) — nothing is sent to a
+server. The "Baby" tab has an option to export all records as a JSON backup.
+
+## Development
 
 ```bash
 npm install
-npm run dev      # servidor local em http://localhost:5173
-npm run build    # build de produção em dist/
-npm run preview  # serve o build de produção
+npm run dev      # local dev server at http://localhost:5173
+npm run build    # production build in dist/
+npm run preview  # serve the production build
 ```
 
 Stack: React + TypeScript + Vite, Dexie (IndexedDB), Recharts, vite-plugin-pwa.
 
 ## Deploy
 
-O deploy é automático para o GitHub Pages a cada push no branch padrão,
-pelo workflow `.github/workflows/deploy.yml`.
+Deploys automatically to GitHub Pages on every push to the default branch,
+via the `.github/workflows/deploy.yml` workflow.
 
-Antes do primeiro deploy é preciso ativar o Pages uma única vez, em
-**Settings > Pages > Build and deployment**, escolhendo **GitHub Actions**
-como "Source" (o token do workflow não tem permissão para criar o site sozinho).
+Before the first deploy, Pages needs to be enabled once in
+**Settings > Pages > Build and deployment**, with **GitHub Actions** selected
+as the "Source" (the workflow's token can't create the site on its own).
 
-Como o site é servido em um subdiretório (`/my-baby-monitor-/`), esse caminho
-está definido em `base` no `vite.config.ts` — se o repositório for renomeado,
-esse valor precisa ser atualizado junto.
+Since the site is served from a subdirectory (`/my-baby-monitor-/`), that path
+is set as `base` in `vite.config.ts` — if the repository is ever renamed,
+update that value too.
