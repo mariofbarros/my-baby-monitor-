@@ -243,7 +243,7 @@ export default function Dashboard() {
               <LineChart data={feedingChart}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="label" fontSize={11} stroke="var(--text-muted)" interval="preserveStartEnd" minTickGap={8} />
-                <YAxis fontSize={11} stroke="var(--text-muted)" allowDecimals={false} />
+                <YAxis fontSize={11} stroke="var(--text-muted)" allowDecimals={false} width={30} tickMargin={4} />
                 <Tooltip />
                 <Line
                   type="monotone"
@@ -259,7 +259,7 @@ export default function Dashboard() {
               <BarChart data={feedingChart}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="label" fontSize={11} stroke="var(--text-muted)" interval="preserveStartEnd" minTickGap={8} />
-                <YAxis fontSize={11} stroke="var(--text-muted)" allowDecimals={false} />
+                <YAxis fontSize={11} stroke="var(--text-muted)" allowDecimals={false} width={30} tickMargin={4} />
                 <Tooltip />
                 <Bar dataKey="mamadas" fill="var(--accent)" radius={[4, 4, 0, 0]} name="Mamadas" />
               </BarChart>
@@ -277,7 +277,7 @@ export default function Dashboard() {
               <LineChart data={diaperChart}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="label" fontSize={11} stroke="var(--text-muted)" interval="preserveStartEnd" minTickGap={8} />
-                <YAxis fontSize={11} stroke="var(--text-muted)" allowDecimals={false} />
+                <YAxis fontSize={11} stroke="var(--text-muted)" allowDecimals={false} width={30} tickMargin={4} />
                 <Tooltip />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Line type="monotone" dataKey="xixi" name="Xixi" stroke="var(--pee)" strokeWidth={2} dot={{ r: 2.5 }} activeDot={{ r: 4 }} />
@@ -290,7 +290,7 @@ export default function Dashboard() {
               <BarChart data={diaperChart}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="label" fontSize={11} stroke="var(--text-muted)" interval="preserveStartEnd" minTickGap={8} />
-                <YAxis fontSize={11} stroke="var(--text-muted)" allowDecimals={false} />
+                <YAxis fontSize={11} stroke="var(--text-muted)" allowDecimals={false} width={30} tickMargin={4} />
                 <Tooltip />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Bar dataKey="xixi" stackId="a" fill="var(--pee)" name="Xixi" />
