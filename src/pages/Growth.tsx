@@ -1,7 +1,9 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { PencilIcon } from '../components/Icons'
 import { db } from '../lib/db'
+import type { Measurement } from '../lib/types'
 import { formatDateShort, todayIso } from '../lib/time'
 
 export default function Growth() {
@@ -118,26 +120,120 @@ export default function Growth() {
         {!!measurements?.length && (
           <div className="card">
             {measurements.map((m) => (
-              <div className="list-item" key={m.id}>
-                <div>
-                  <p style={{ fontWeight: 600, fontSize: 14 }}>
-                    {m.weightGrams ? `${(m.weightGrams / 1000).toFixed(3)} kg` : '—'}
-                    {m.heightCm ? ` · ${m.heightCm} cm` : ''}
-                  </p>
-                  <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{formatDateShort(new Date(m.date + 'T00:00:00').getTime())}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => deleteMeasurement(m.id)}
-                  aria-label="Remover"
-                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 18 }}
-                >
-                  ×
-                </button>
-              </div>
+              <MeasurementRow key={m.id} measurement={m} onDelete={deleteMeasurement} />
             ))}
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+function MeasurementRow({
+  measurement,
+  onDelete,
+}: {
+  measurement: Measurement
+  onDelete: (id?: number) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [date, setDate] = useState('')
+  const [weightKg, setWeightKg] = useState('')
+  const [heightCm, setHeightCm] = useState('')
+
+  function startEdit() {
+    setDate(measurement.date)
+    setWeightKg(measurement.weightGrams ? String(measurement.weightGrams / 1000) : '')
+    setHeightCm(measurement.heightCm ? String(measurement.heightCm) : '')
+    setEditing(true)
+  }
+
+  async function save() {
+    if (measurement.id == null || !date) return
+    const weightGrams = weightKg ? Math.round(parseFloat(weightKg.replace(',', '.')) * 1000) : undefined
+    const heightCmNum = heightCm ? parseFloat(heightCm.replace(',', '.')) : undefined
+    if (!weightGrams && !heightCmNum) return
+    // Um valor undefined apaga o campo no Dexie — útil se o peso ou a altura foram limpos na edição.
+    await db.measurements.update(measurement.id, { date, weightGrams, heightCm: heightCmNum })
+    setEditing(false)
+  }
+
+  if (editing) {
+    const inputId = `measurement-${measurement.id}`
+    return (
+      <div className="edit-row">
+        <div>
+          <label htmlFor={`${inputId}-date`}>Data</label>
+          <input
+            id={`${inputId}-date`}
+            type="date"
+            value={date}
+            max={todayIso()}
+            onChange={(e) => setDate(e.target.value)}
+          />
+        </div>
+        <div className="edit-row-fields">
+          <div>
+            <label htmlFor={`${inputId}-weight`}>Peso (kg)</label>
+            <input
+              id={`${inputId}-weight`}
+              type="number"
+              inputMode="decimal"
+              step="0.001"
+              placeholder="3.5"
+              value={weightKg}
+              onChange={(e) => setWeightKg(e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor={`${inputId}-height`}>Altura (cm)</label>
+            <input
+              id={`${inputId}-height`}
+              type="number"
+              inputMode="decimal"
+              step="0.1"
+              placeholder="50"
+              value={heightCm}
+              onChange={(e) => setHeightCm(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="edit-row-buttons">
+          <button type="button" className="btn btn-outline" onClick={() => setEditing(false)}>
+            Cancelar
+          </button>
+          <button type="button" className="btn btn-primary" onClick={save}>
+            Salvar
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="list-item">
+      <div>
+        <p style={{ fontWeight: 600, fontSize: 14 }}>
+          {measurement.weightGrams ? `${(measurement.weightGrams / 1000).toFixed(3)} kg` : '—'}
+          {measurement.heightCm ? ` · ${measurement.heightCm} cm` : ''}
+        </p>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          {formatDateShort(new Date(measurement.date + 'T00:00:00').getTime())}
+        </p>
+      </div>
+      <div className="row-actions">
+        <button type="button" className="icon-btn" onClick={startEdit} aria-label="Editar medição">
+          <PencilIcon />
+        </button>
+        <button
+          type="button"
+          className="icon-btn"
+          onClick={() => onDelete(measurement.id)}
+          aria-label="Remover medição"
+          style={{ fontSize: 18 }}
+        >
+          ×
+        </button>
       </div>
     </div>
   )

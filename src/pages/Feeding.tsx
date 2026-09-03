@@ -256,17 +256,17 @@ function FeedingRow({ feeding, onDelete }: { feeding: FeedingSession; onDelete: 
             Direito
           </button>
         </div>
+        <div>
+          <label htmlFor={`${inputId}-date`}>Data</label>
+          <input
+            id={`${inputId}-date`}
+            type="date"
+            value={date}
+            max={todayIso()}
+            onChange={(e) => setDate(e.target.value)}
+          />
+        </div>
         <div className="edit-row-fields">
-          <div>
-            <label htmlFor={`${inputId}-date`}>Data</label>
-            <input
-              id={`${inputId}-date`}
-              type="date"
-              value={date}
-              max={todayIso()}
-              onChange={(e) => setDate(e.target.value)}
-            />
-          </div>
           <div>
             <label htmlFor={`${inputId}-time`}>Início</label>
             <input id={`${inputId}-time`} type="time" value={time} onChange={(e) => setTime(e.target.value)} />
