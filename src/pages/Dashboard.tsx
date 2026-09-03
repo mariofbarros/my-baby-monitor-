@@ -80,7 +80,7 @@ export default function Dashboard() {
   const isMultiDay = view.days > 1
 
   const now = Date.now()
-  const hoursSinceFeeding = latestFeeding ? (now - latestFeeding.startTime) / 3_600_000 : null
+  const hoursSinceFeeding = latestFeeding ? (now - latestFeeding.endTime) / 3_600_000 : null
   const hoursSinceDiaper = latestDiaper ? (now - latestDiaper.timestamp) / 3_600_000 : null
 
   const alerts: string[] = []
@@ -128,7 +128,7 @@ export default function Dashboard() {
               <p style={{ fontSize: 18, fontWeight: 700, color: 'var(--accent)' }}>Em andamento</p>
             ) : latestFeeding ? (
               <>
-                <p style={{ fontSize: 20, fontWeight: 700 }}>{formatTimeAgo(latestFeeding.startTime)}</p>
+                <p style={{ fontSize: 20, fontWeight: 700 }}>{formatTimeAgo(latestFeeding.endTime)}</p>
                 <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                   {latestFeeding.side === 'left' ? 'Esquerdo' : 'Direito'} ·{' '}
                   {formatDuration(latestFeeding.durationSeconds)}
