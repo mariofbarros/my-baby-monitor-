@@ -1,11 +1,20 @@
 import { useLiveQuery } from 'dexie-react-hooks'
+import { useState } from 'react'
 import RangeFilter from '../components/RangeFilter'
 import { db } from '../lib/db'
-import type { DiaperType } from '../lib/types'
+import type { DiaperChange, DiaperType } from '../lib/types'
 import { clampRangeToData } from '../lib/ranges'
 import { useRangeFilter } from '../lib/useRangeFilter'
-import { formatClock, formatDateShort, formatTimeAgo } from '../lib/time'
-import { DropIcon } from '../components/Icons'
+import {
+  combineDateAndTime,
+  formatClock,
+  formatDateShort,
+  formatTimeAgo,
+  todayIso,
+  toDateInputValue,
+  toTimeInputValue,
+} from '../lib/time'
+import { DropIcon, PencilIcon } from '../components/Icons'
 
 const MAX_ROWS = 100
 
@@ -123,24 +132,7 @@ export default function Diapers() {
         {rows.length > 0 && (
           <div className="card">
             {rows.slice(0, MAX_ROWS).map((d) => (
-              <div className="list-item" key={d.id}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span className="badge" style={{ background: TYPE_BG[d.type], color: TYPE_COLOR[d.type] }}>
-                    {TYPE_LABEL[d.type]}
-                  </span>
-                  <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    {formatDateShort(d.timestamp)} · {formatClock(d.timestamp)}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => deleteDiaper(d.id)}
-                  aria-label="Remover"
-                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 18 }}
-                >
-                  ×
-                </button>
-              </div>
+              <DiaperRow key={d.id} diaper={d} onDelete={deleteDiaper} />
             ))}
           </div>
         )}
@@ -150,6 +142,99 @@ export default function Diapers() {
             Mostrando as {MAX_ROWS} mais recentes de {rows.length}.
           </p>
         )}
+      </div>
+    </div>
+  )
+}
+
+function DiaperRow({ diaper, onDelete }: { diaper: DiaperChange; onDelete: (id?: number) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [type, setType] = useState<DiaperType>(diaper.type)
+  const [date, setDate] = useState('')
+  const [time, setTime] = useState('')
+
+  function startEdit() {
+    setType(diaper.type)
+    setDate(toDateInputValue(diaper.timestamp))
+    setTime(toTimeInputValue(diaper.timestamp))
+    setEditing(true)
+  }
+
+  async function save() {
+    if (diaper.id == null || !date || !time) return
+    const timestamp = combineDateAndTime(date, time)
+    await db.diapers.update(diaper.id, { type, timestamp })
+    setEditing(false)
+  }
+
+  if (editing) {
+    const inputId = `diaper-${diaper.id}`
+    return (
+      <div className="edit-row">
+        <div className="edit-row-toggle">
+          {(['pee', 'poop', 'both'] as DiaperType[]).map((t) => (
+            <button
+              key={t}
+              type="button"
+              className={`toggle-btn${type === t ? ' active' : ''}`}
+              style={{ color: TYPE_COLOR[t] }}
+              onClick={() => setType(t)}
+            >
+              {TYPE_LABEL[t]}
+            </button>
+          ))}
+        </div>
+        <div className="edit-row-fields">
+          <div>
+            <label htmlFor={`${inputId}-date`}>Data</label>
+            <input
+              id={`${inputId}-date`}
+              type="date"
+              value={date}
+              max={todayIso()}
+              onChange={(e) => setDate(e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor={`${inputId}-time`}>Hora</label>
+            <input id={`${inputId}-time`} type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+          </div>
+        </div>
+        <div className="edit-row-buttons">
+          <button type="button" className="btn btn-outline" onClick={() => setEditing(false)}>
+            Cancelar
+          </button>
+          <button type="button" className="btn btn-primary" onClick={save}>
+            Salvar
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="list-item">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span className="badge" style={{ background: TYPE_BG[diaper.type], color: TYPE_COLOR[diaper.type] }}>
+          {TYPE_LABEL[diaper.type]}
+        </span>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          {formatDateShort(diaper.timestamp)} · {formatClock(diaper.timestamp)}
+        </p>
+      </div>
+      <div className="row-actions">
+        <button type="button" className="icon-btn" onClick={startEdit} aria-label="Editar troca">
+          <PencilIcon />
+        </button>
+        <button
+          type="button"
+          className="icon-btn"
+          onClick={() => onDelete(diaper.id)}
+          aria-label="Remover troca"
+          style={{ fontSize: 18 }}
+        >
+          ×
+        </button>
       </div>
     </div>
   )

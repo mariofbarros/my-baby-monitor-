@@ -55,6 +55,27 @@ export function todayIso(): string {
   return new Date(d.getTime() - offset * 60_000).toISOString().slice(0, 10)
 }
 
+/** Valor para um <input type="date"> (YYYY-MM-DD, no fuso local). */
+export function toDateInputValue(epochMs: number): string {
+  const d = new Date(epochMs)
+  const offset = d.getTimezoneOffset()
+  return new Date(d.getTime() - offset * 60_000).toISOString().slice(0, 10)
+}
+
+/** Valor para um <input type="time"> (HH:MM, no fuso local). */
+export function toTimeInputValue(epochMs: number): string {
+  const d = new Date(epochMs)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+/** Recompõe data (YYYY-MM-DD) + hora (HH:MM) dos inputs em um epoch ms local. */
+export function combineDateAndTime(dateStr: string, timeStr: string): number {
+  const [hours, minutes] = timeStr.split(':').map(Number)
+  const d = new Date(dateStr + 'T00:00:00')
+  d.setHours(hours || 0, minutes || 0, 0, 0)
+  return d.getTime()
+}
+
 export function ageLabel(birthDateIso: string): string {
   const birth = new Date(birthDateIso + 'T00:00:00')
   const now = new Date()

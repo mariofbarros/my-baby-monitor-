@@ -1,11 +1,21 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useState } from 'react'
 import RangeFilter from '../components/RangeFilter'
+import { PencilIcon } from '../components/Icons'
 import { db } from '../lib/db'
-import type { Side } from '../lib/types'
+import type { FeedingSession, Side } from '../lib/types'
 import { clampRangeToData } from '../lib/ranges'
 import { useRangeFilter } from '../lib/useRangeFilter'
-import { formatClock, formatDateShort, formatDuration, formatDurationLabel } from '../lib/time'
+import {
+  combineDateAndTime,
+  formatClock,
+  formatDateShort,
+  formatDuration,
+  formatDurationLabel,
+  todayIso,
+  toDateInputValue,
+  toTimeInputValue,
+} from '../lib/time'
 
 const MAX_ROWS = 100
 
@@ -150,33 +160,7 @@ export default function Feeding() {
         {rows.length > 0 && (
           <div className="card">
             {rows.slice(0, MAX_ROWS).map((f) => (
-              <div className="list-item" key={f.id}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span
-                    className="badge"
-                    style={{
-                      background: f.side === 'left' ? 'var(--left-bg)' : 'var(--right-bg)',
-                      color: f.side === 'left' ? 'var(--left)' : 'var(--right)',
-                    }}
-                  >
-                    {f.side === 'left' ? 'Esq' : 'Dir'}
-                  </span>
-                  <div>
-                    <p style={{ fontWeight: 600, fontSize: 14 }}>{formatDuration(f.durationSeconds)}</p>
-                    <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                      {formatDateShort(f.startTime)} · {formatClock(f.startTime)}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => deleteFeeding(f.id)}
-                  aria-label="Remover"
-                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 18 }}
-                >
-                  ×
-                </button>
-              </div>
+              <FeedingRow key={f.id} feeding={f} onDelete={deleteFeeding} />
             ))}
           </div>
         )}
@@ -221,5 +205,129 @@ function SideButton({ side, suggested, onClick }: { side: Side; suggested: boole
       <span style={{ fontSize: 28 }}>{side === 'left' ? '◐' : '◑'}</span>
       <span style={{ fontSize: 15, fontWeight: 700 }}>{label}</span>
     </button>
+  )
+}
+
+function FeedingRow({ feeding, onDelete }: { feeding: FeedingSession; onDelete: (id?: number) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [side, setSide] = useState<Side>(feeding.side)
+  const [date, setDate] = useState('')
+  const [time, setTime] = useState('')
+  const [durationMin, setDurationMin] = useState('')
+
+  function startEdit() {
+    setSide(feeding.side)
+    setDate(toDateInputValue(feeding.startTime))
+    setTime(toTimeInputValue(feeding.startTime))
+    setDurationMin(String(Math.round(feeding.durationSeconds / 60)))
+    setEditing(true)
+  }
+
+  async function save() {
+    if (feeding.id == null) return
+    const minutes = parseFloat(durationMin.replace(',', '.'))
+    if (!date || !time || !Number.isFinite(minutes) || minutes <= 0) return
+    const startTime = combineDateAndTime(date, time)
+    const durationSeconds = Math.round(minutes * 60)
+    const endTime = startTime + durationSeconds * 1000
+    await db.feedings.update(feeding.id, { side, startTime, endTime, durationSeconds })
+    setEditing(false)
+  }
+
+  if (editing) {
+    const inputId = `feeding-${feeding.id}`
+    return (
+      <div className="edit-row">
+        <div className="edit-row-toggle">
+          <button
+            type="button"
+            className={`toggle-btn${side === 'left' ? ' active' : ''}`}
+            style={{ color: 'var(--left)' }}
+            onClick={() => setSide('left')}
+          >
+            Esquerdo
+          </button>
+          <button
+            type="button"
+            className={`toggle-btn${side === 'right' ? ' active' : ''}`}
+            style={{ color: 'var(--right)' }}
+            onClick={() => setSide('right')}
+          >
+            Direito
+          </button>
+        </div>
+        <div className="edit-row-fields">
+          <div>
+            <label htmlFor={`${inputId}-date`}>Data</label>
+            <input
+              id={`${inputId}-date`}
+              type="date"
+              value={date}
+              max={todayIso()}
+              onChange={(e) => setDate(e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor={`${inputId}-time`}>Início</label>
+            <input id={`${inputId}-time`} type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+          </div>
+          <div>
+            <label htmlFor={`${inputId}-dur`}>Duração (min)</label>
+            <input
+              id={`${inputId}-dur`}
+              type="number"
+              inputMode="numeric"
+              min="1"
+              value={durationMin}
+              onChange={(e) => setDurationMin(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="edit-row-buttons">
+          <button type="button" className="btn btn-outline" onClick={() => setEditing(false)}>
+            Cancelar
+          </button>
+          <button type="button" className="btn btn-primary" onClick={save}>
+            Salvar
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="list-item">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span
+          className="badge"
+          style={{
+            background: feeding.side === 'left' ? 'var(--left-bg)' : 'var(--right-bg)',
+            color: feeding.side === 'left' ? 'var(--left)' : 'var(--right)',
+          }}
+        >
+          {feeding.side === 'left' ? 'Esq' : 'Dir'}
+        </span>
+        <div>
+          <p style={{ fontWeight: 600, fontSize: 14 }}>{formatDuration(feeding.durationSeconds)}</p>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            {formatDateShort(feeding.startTime)} · {formatClock(feeding.startTime)}
+          </p>
+        </div>
+      </div>
+      <div className="row-actions">
+        <button type="button" className="icon-btn" onClick={startEdit} aria-label="Editar mamada">
+          <PencilIcon />
+        </button>
+        <button
+          type="button"
+          className="icon-btn"
+          onClick={() => onDelete(feeding.id)}
+          aria-label="Remover mamada"
+          style={{ fontSize: 18 }}
+        >
+          ×
+        </button>
+      </div>
+    </div>
   )
 }
