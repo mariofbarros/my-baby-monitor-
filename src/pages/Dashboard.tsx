@@ -14,9 +14,12 @@ import {
 } from 'recharts'
 import RangeFilter from '../components/RangeFilter'
 import { db } from '../lib/db'
+import { feedingMethodShortLabel } from '../lib/feeding'
 import { bucketKeyOf, buildBuckets, clampRangeToData, granularityOf, GRANULARITY_LABEL } from '../lib/ranges'
 import { useRangeFilter } from '../lib/useRangeFilter'
 import { ageLabel, formatDuration, formatDurationLabel, formatTimeAgo } from '../lib/time'
+
+const RECENT_LOOKUP = 50
 
 const FEEDING_ALERT_HOURS = 4
 const DIAPER_ALERT_HOURS = 6
@@ -27,6 +30,11 @@ export default function Dashboard() {
   const profile = useLiveQuery(() => db.profile.get(1))
   const activeFeeding = useLiveQuery(() => db.activeFeeding.get(1))
   const latestFeeding = useLiveQuery(() => db.feedings.orderBy('startTime').last())
+  const recentFeedings = useLiveQuery(
+    () => db.feedings.orderBy('startTime').reverse().limit(RECENT_LOOKUP).toArray(),
+    [],
+    [],
+  )
   const latestDiaper = useLiveQuery(() => db.diapers.orderBy('timestamp').last())
   const latestMeasurement = useLiveQuery(() => db.measurements.orderBy('date').last())
 
@@ -91,7 +99,10 @@ export default function Dashboard() {
     alerts.push(`Já se passaram mais de ${DIAPER_ALERT_HOURS}h desde a última troca de fralda.`)
   }
 
-  const nextSide = latestFeeding?.side === 'left' ? 'Direito' : 'Esquerdo'
+  // A sugestão de próximo peito segue a última mamada NO PEITO — mamadas de
+  // mamadeira pura não têm lado e são puladas.
+  const lastFeedingWithSide = recentFeedings.find((f) => f.side)
+  const nextSide = lastFeedingWithSide?.side === 'left' ? 'Direito' : 'Esquerdo'
 
   return (
     <div>
@@ -130,7 +141,7 @@ export default function Dashboard() {
               <>
                 <p style={{ fontSize: 20, fontWeight: 700 }}>{formatTimeAgo(latestFeeding.endTime)}</p>
                 <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  {latestFeeding.side === 'left' ? 'Esquerdo' : 'Direito'} ·{' '}
+                  {feedingMethodShortLabel(latestFeeding.method, latestFeeding.side)} ·{' '}
                   {formatDuration(latestFeeding.durationSeconds)}
                 </p>
               </>
@@ -141,7 +152,7 @@ export default function Dashboard() {
 
           <Link to="/feeding" className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Próximo peito</p>
-            {latestFeeding ? (
+            {lastFeedingWithSide ? (
               <>
                 <p
                   style={{

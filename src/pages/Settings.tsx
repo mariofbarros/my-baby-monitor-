@@ -1,13 +1,13 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState } from 'react'
 import { db } from '../lib/db'
-import type { DiaperType, Side } from '../lib/types'
+import type { DiaperType, FeedingMethod, Side } from '../lib/types'
 import { ageLabel, todayIso } from '../lib/time'
 
 type ImportResult = { ok: boolean; message: string }
 
 type PendingImport = {
-  feedings: { side: Side; startTime: number; endTime: number; durationSeconds: number }[]
+  feedings: { method: FeedingMethod; side?: Side; startTime: number; endTime: number; durationSeconds: number }[]
   diapers: { type: DiaperType; timestamp: number }[]
   measurements: { date: string; weightGrams?: number; heightCm?: number }[]
   profile: { name: string; birthDate?: string } | null
@@ -16,6 +16,7 @@ type PendingImport = {
 type ImportMode = 'add' | 'replace'
 
 const FEEDING_SIDES: Side[] = ['left', 'right']
+const FEEDING_METHOD_IDS: FeedingMethod[] = ['breast', 'bottle', 'mixed']
 const DIAPER_TYPES: DiaperType[] = ['pee', 'poop', 'both']
 
 export default function Settings() {
@@ -68,15 +69,34 @@ export default function Settings() {
       const parsed = JSON.parse(await file.text())
       if (!parsed || typeof parsed !== 'object') throw new Error('formato inválido')
 
-      const feedings = (Array.isArray(parsed.feedings) ? parsed.feedings : []).filter(
-        (f: unknown): f is PendingImport['feedings'][number] =>
-          !!f &&
-          typeof f === 'object' &&
-          FEEDING_SIDES.includes((f as { side?: unknown }).side as Side) &&
-          typeof (f as { startTime?: unknown }).startTime === 'number' &&
-          typeof (f as { endTime?: unknown }).endTime === 'number' &&
-          typeof (f as { durationSeconds?: unknown }).durationSeconds === 'number',
-      )
+      const feedings = (Array.isArray(parsed.feedings) ? parsed.feedings : [])
+        .map((f: unknown): PendingImport['feedings'][number] | null => {
+          if (!f || typeof f !== 'object') return null
+          const r = f as Record<string, unknown>
+          if (
+            typeof r.startTime !== 'number' ||
+            typeof r.endTime !== 'number' ||
+            typeof r.durationSeconds !== 'number'
+          ) {
+            return null
+          }
+          const side = FEEDING_SIDES.includes(r.side as Side) ? (r.side as Side) : undefined
+          // Backups de antes da modalidade existir não têm "method" — toda mamada era no peito.
+          const method: FeedingMethod = FEEDING_METHOD_IDS.includes(r.method as FeedingMethod)
+            ? (r.method as FeedingMethod)
+            : side
+              ? 'breast'
+              : 'bottle'
+          if (method !== 'bottle' && !side) return null
+          return {
+            method,
+            side: method === 'bottle' ? undefined : side,
+            startTime: r.startTime,
+            endTime: r.endTime,
+            durationSeconds: r.durationSeconds,
+          }
+        })
+        .filter((f: PendingImport['feedings'][number] | null): f is PendingImport['feedings'][number] => f !== null)
       const diapers = (Array.isArray(parsed.diapers) ? parsed.diapers : []).filter(
         (d: unknown): d is PendingImport['diapers'][number] =>
           !!d &&
@@ -123,7 +143,13 @@ export default function Settings() {
           await Promise.all([db.feedings.clear(), db.diapers.clear(), db.measurements.clear(), db.profile.clear()])
         }
         for (const f of feedings) {
-          await db.feedings.add({ side: f.side, startTime: f.startTime, endTime: f.endTime, durationSeconds: f.durationSeconds })
+          await db.feedings.add({
+            method: f.method,
+            side: f.side,
+            startTime: f.startTime,
+            endTime: f.endTime,
+            durationSeconds: f.durationSeconds,
+          })
         }
         for (const d of diapers) {
           await db.diapers.add({ type: d.type, timestamp: d.timestamp })

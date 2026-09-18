@@ -1,11 +1,18 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useState } from 'react'
 import RangeFilter from '../components/RangeFilter'
-import { PencilIcon } from '../components/Icons'
+import { BottleIcon, PencilIcon } from '../components/Icons'
 import { db } from '../lib/db'
-import type { FeedingSession, Side } from '../lib/types'
+import type { ActiveFeeding, FeedingMethod, FeedingSession, Side } from '../lib/types'
 import { clampRangeToData } from '../lib/ranges'
 import { useRangeFilter } from '../lib/useRangeFilter'
+import {
+  FEEDING_METHODS,
+  feedingBadgeTag,
+  feedingMethodBadgeLabel,
+  feedingMethodBg,
+  feedingMethodColor,
+} from '../lib/feeding'
 import {
   combineDateAndTime,
   formatClock,
@@ -18,6 +25,9 @@ import {
 } from '../lib/time'
 
 const MAX_ROWS = 100
+// Buffer de registros recentes onde procurar a última mamada NO PEITO (para
+// a sugestão de lado) — mamadas de mamadeira pura não têm lado e são puladas.
+const RECENT_LOOKUP = 50
 
 function useNow(active: boolean) {
   const [now, setNow] = useState(() => Date.now())
@@ -32,9 +42,14 @@ function useNow(active: boolean) {
 export default function Feeding() {
   const { rangeId, setRangeId, range } = useRangeFilter('range:feeding')
 
+  const [selectedMethod, setSelectedMethod] = useState<FeedingMethod>('breast')
+
   const active = useLiveQuery(() => db.activeFeeding.get(1))
-  // A sugestão de lado segue a última mamada registrada, independente do filtro.
-  const latestFeeding = useLiveQuery(() => db.feedings.orderBy('startTime').last())
+  const recentFeedings = useLiveQuery(
+    () => db.feedings.orderBy('startTime').reverse().limit(RECENT_LOOKUP).toArray(),
+    [],
+    [],
+  )
   const feedings = useLiveQuery(
     () => db.feedings.where('startTime').between(range.start, range.end, true, false).toArray(),
     [range.start, range.end],
@@ -43,24 +58,31 @@ export default function Feeding() {
 
   const now = useNow(!!active)
 
-  const suggestedSide: Side = latestFeeding?.side === 'left' ? 'right' : 'left'
+  // A sugestão de lado segue a última mamada no peito (peito ou misto), independente do filtro.
+  const lastWithSide = recentFeedings.find((f) => f.side)
+  const suggestedSide: Side = lastWithSide?.side === 'left' ? 'right' : 'left'
 
   const rows = (feedings ?? []).slice().sort((a, b) => b.startTime - a.startTime)
   const totalSeconds = rows.reduce((sum, f) => sum + f.durationSeconds, 0)
   const leftCount = rows.filter((f) => f.side === 'left').length
-  const rightCount = rows.length - leftCount
+  const rightCount = rows.filter((f) => f.side === 'right').length
+  const bottleCount = rows.filter((f) => f.method === 'bottle').length
   // Em "Máximo" o período começa na mamada mais antiga (a lista está em ordem decrescente).
   const view = clampRangeToData(range, rows.at(-1)?.startTime)
 
-  async function startFeeding(side: Side) {
-    await db.activeFeeding.put({ id: 1, side, startTime: Date.now() })
+  async function startFeeding(method: FeedingMethod, side?: Side) {
+    const record: ActiveFeeding = { id: 1, method, startTime: Date.now() }
+    if (side) record.side = side
+    await db.activeFeeding.put(record)
   }
 
   async function finishFeeding() {
     if (!active) return
     const endTime = Date.now()
     const durationSeconds = Math.max(1, Math.round((endTime - active.startTime) / 1000))
-    await db.feedings.add({ side: active.side, startTime: active.startTime, endTime, durationSeconds })
+    const record: Omit<FeedingSession, 'id'> = { method: active.method, startTime: active.startTime, endTime, durationSeconds }
+    if (active.side) record.side = active.side
+    await db.feedings.add(record)
     await db.activeFeeding.delete(1)
   }
 
@@ -83,14 +105,48 @@ export default function Feeding() {
       <div className="page">
         {!active && (
           <div className="card" style={{ textAlign: 'center' }}>
-            <p style={{ fontWeight: 700, marginBottom: 4 }}>Escolha o peito para começar</p>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-              Sugestão baseada na última mamada
-            </p>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <SideButton side="left" suggested={suggestedSide === 'left'} onClick={() => startFeeding('left')} />
-              <SideButton side="right" suggested={suggestedSide === 'right'} onClick={() => startFeeding('right')} />
+            <p style={{ fontWeight: 700, marginBottom: 12 }}>Nova mamada</p>
+            <div className="method-toggle">
+              {FEEDING_METHODS.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  className={`toggle-btn${selectedMethod === m.id ? ' active' : ''}`}
+                  style={{ color: feedingMethodColor(m.id, 'left') }}
+                  onClick={() => setSelectedMethod(m.id)}
+                >
+                  {m.label}
+                </button>
+              ))}
             </div>
+
+            {selectedMethod === 'bottle' ? (
+              <button
+                type="button"
+                onClick={() => startFeeding('bottle')}
+                className="btn"
+                style={{
+                  width: '100%',
+                  flexDirection: 'column',
+                  padding: '22px 12px',
+                  background: 'var(--bottle-bg)',
+                  color: 'var(--bottle)',
+                }}
+              >
+                <BottleIcon />
+                <span style={{ fontSize: 15, fontWeight: 700, marginTop: 4 }}>Iniciar mamadeira</span>
+              </button>
+            ) : (
+              <>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+                  Sugestão baseada na última mamada no peito
+                </p>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <SideButton side="left" suggested={suggestedSide === 'left'} onClick={() => startFeeding(selectedMethod, 'left')} />
+                  <SideButton side="right" suggested={suggestedSide === 'right'} onClick={() => startFeeding(selectedMethod, 'right')} />
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -99,17 +155,17 @@ export default function Feeding() {
             className="card"
             style={{
               textAlign: 'center',
-              background: active.side === 'left' ? 'var(--left-bg)' : 'var(--right-bg)',
+              background: feedingMethodBg(active.method, active.side),
             }}
           >
             <span
               className="badge"
               style={{
-                background: active.side === 'left' ? 'var(--left)' : 'var(--right)',
+                background: feedingMethodColor(active.method, active.side),
                 color: 'white',
               }}
             >
-              Peito {active.side === 'left' ? 'esquerdo' : 'direito'}
+              {feedingMethodBadgeLabel(active.method, active.side)}
             </span>
             <p style={{ fontSize: 48, fontWeight: 800, fontVariantNumeric: 'tabular-nums', margin: '16px 0' }}>
               {formatDuration(elapsedSeconds)}
@@ -150,6 +206,12 @@ export default function Feeding() {
             <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 14 }}>
               <span style={{ color: 'var(--left)', fontWeight: 700 }}>{leftCount}</span> no esquerdo ·{' '}
               <span style={{ color: 'var(--right)', fontWeight: 700 }}>{rightCount}</span> no direito
+              {bottleCount > 0 && (
+                <>
+                  {' · '}
+                  <span style={{ color: 'var(--bottle)', fontWeight: 700 }}>{bottleCount}</span> na mamadeira
+                </>
+              )}
               {view.days > 1 && ` · ${(rows.length / view.days).toFixed(1)} por dia`}
             </p>
           </div>
@@ -210,13 +272,15 @@ function SideButton({ side, suggested, onClick }: { side: Side; suggested: boole
 
 function FeedingRow({ feeding, onDelete }: { feeding: FeedingSession; onDelete: (id?: number) => void }) {
   const [editing, setEditing] = useState(false)
-  const [side, setSide] = useState<Side>(feeding.side)
+  const [method, setMethod] = useState<FeedingMethod>(feeding.method)
+  const [side, setSide] = useState<Side>(feeding.side ?? 'left')
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
   const [durationMin, setDurationMin] = useState('')
 
   function startEdit() {
-    setSide(feeding.side)
+    setMethod(feeding.method)
+    setSide(feeding.side ?? 'left')
     setDate(toDateInputValue(feeding.startTime))
     setTime(toTimeInputValue(feeding.startTime))
     setDurationMin(String(Math.round(feeding.durationSeconds / 60)))
@@ -230,7 +294,13 @@ function FeedingRow({ feeding, onDelete }: { feeding: FeedingSession; onDelete: 
     const startTime = combineDateAndTime(date, time)
     const durationSeconds = Math.round(minutes * 60)
     const endTime = startTime + durationSeconds * 1000
-    await db.feedings.update(feeding.id, { side, startTime, endTime, durationSeconds })
+    await db.feedings.update(feeding.id, {
+      method,
+      side: method === 'bottle' ? undefined : side,
+      startTime,
+      endTime,
+      durationSeconds,
+    })
     setEditing(false)
   }
 
@@ -239,23 +309,38 @@ function FeedingRow({ feeding, onDelete }: { feeding: FeedingSession; onDelete: 
     return (
       <div className="edit-row">
         <div className="edit-row-toggle">
-          <button
-            type="button"
-            className={`toggle-btn${side === 'left' ? ' active' : ''}`}
-            style={{ color: 'var(--left)' }}
-            onClick={() => setSide('left')}
-          >
-            Esquerdo
-          </button>
-          <button
-            type="button"
-            className={`toggle-btn${side === 'right' ? ' active' : ''}`}
-            style={{ color: 'var(--right)' }}
-            onClick={() => setSide('right')}
-          >
-            Direito
-          </button>
+          {FEEDING_METHODS.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              className={`toggle-btn${method === m.id ? ' active' : ''}`}
+              style={{ color: feedingMethodColor(m.id, 'left') }}
+              onClick={() => setMethod(m.id)}
+            >
+              {m.label}
+            </button>
+          ))}
         </div>
+        {method !== 'bottle' && (
+          <div className="edit-row-toggle">
+            <button
+              type="button"
+              className={`toggle-btn${side === 'left' ? ' active' : ''}`}
+              style={{ color: 'var(--left)' }}
+              onClick={() => setSide('left')}
+            >
+              Esquerdo
+            </button>
+            <button
+              type="button"
+              className={`toggle-btn${side === 'right' ? ' active' : ''}`}
+              style={{ color: 'var(--right)' }}
+              onClick={() => setSide('right')}
+            >
+              Direito
+            </button>
+          </div>
+        )}
         <div>
           <label htmlFor={`${inputId}-date`}>Data</label>
           <input
@@ -301,14 +386,22 @@ function FeedingRow({ feeding, onDelete }: { feeding: FeedingSession; onDelete: 
         <span
           className="badge"
           style={{
-            background: feeding.side === 'left' ? 'var(--left-bg)' : 'var(--right-bg)',
-            color: feeding.side === 'left' ? 'var(--left)' : 'var(--right)',
+            background: feedingMethodBg(feeding.method, feeding.side),
+            color: feedingMethodColor(feeding.method, feeding.side),
           }}
         >
-          {feeding.side === 'left' ? 'Esq' : 'Dir'}
+          {feedingBadgeTag(feeding.method, feeding.side)}
         </span>
         <div>
-          <p style={{ fontWeight: 600, fontSize: 14 }}>{formatDuration(feeding.durationSeconds)}</p>
+          <p style={{ fontWeight: 600, fontSize: 14 }}>
+            {formatDuration(feeding.durationSeconds)}
+            {feeding.method === 'mixed' && feeding.side && (
+              <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>
+                {' '}
+                · {feeding.side === 'left' ? 'Esq' : 'Dir'}
+              </span>
+            )}
+          </p>
           <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
             {formatDateShort(feeding.startTime)} · {formatClock(feeding.startTime)}
           </p>

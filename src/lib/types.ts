@@ -1,5 +1,7 @@
 export type Side = 'left' | 'right'
 
+export type FeedingMethod = 'breast' | 'bottle' | 'mixed'
+
 export type DiaperType = 'pee' | 'poop' | 'both'
 
 export interface BabyProfile {
@@ -10,7 +12,9 @@ export interface BabyProfile {
 
 export interface FeedingSession {
   id?: number
-  side: Side
+  method: FeedingMethod
+  // Só se aplica a 'breast' e 'mixed'; ausente para 'bottle'.
+  side?: Side
   startTime: number // epoch ms
   endTime: number // epoch ms
   durationSeconds: number
@@ -18,7 +22,8 @@ export interface FeedingSession {
 
 export interface ActiveFeeding {
   id: number // singleton, always 1
-  side: Side
+  method: FeedingMethod
+  side?: Side
   startTime: number // epoch ms
 }
 

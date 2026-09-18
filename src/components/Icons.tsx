@@ -56,6 +56,18 @@ export function DropIcon({ className }: IconProps) {
   )
 }
 
+export function BottleIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 2h6" />
+      <path d="M10 2v3.5L8 8v1" />
+      <path d="M14 2v3.5l2 2.5v1" />
+      <path d="M8 9h8v10a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V9Z" />
+      <path d="M8 14h8" />
+    </svg>
+  )
+}
+
 export function PencilIcon({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

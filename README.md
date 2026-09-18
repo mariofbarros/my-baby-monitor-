@@ -11,10 +11,12 @@ Works in a phone browser and can be installed to the Android home screen
 ## Features
 
 **Feedings**
-- Pick the breast to offer (left or right) and the timer starts immediately
-- Automatic suggestion for the next breast, alternating from the last feeding
+- Three methods: breast (pick left or right), bottle, or mixed (breast + bottle)
+- The timer starts immediately on tap; breast and mixed sessions also track the side
+- Automatic suggestion for the next breast, alternating from the last breast/mixed
+  feeding (bottle-only feedings don't count toward the alternation)
 - The timer survives closing/reopening the app (the start time is saved)
-- History with side, time, and duration of each feeding
+- History with method, side (when applicable), time, and duration of each feeding
 
 **Diapers**
 - One-tap logging: pee, poop, or both
