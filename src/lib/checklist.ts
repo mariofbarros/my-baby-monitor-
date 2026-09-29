@@ -44,17 +44,45 @@ export function countKey(itemId: number, dayStart: number): string {
   return `${itemId}:${dayStart}`
 }
 
-export async function addChecklistItem(db: BabyDb, title: string, now = Date.now()): Promise<number | undefined> {
-  const trimmed = title.trim()
-  if (!trimmed) return undefined
-  const last = await db.checklistItems.orderBy('order').last()
-  return db.checklistItems.add({ title: trimmed, order: (last?.order ?? -1) + 1, createdAt: now })
+export type ChecklistItemFields = { title: string; goal?: number | string | null; note?: string | null }
+
+/** Meta válida é um inteiro a partir de 1; qualquer outra coisa vira "sem meta". */
+export function normalizeGoal(goal: unknown): number | undefined {
+  const n = typeof goal === 'string' ? Number(goal.trim() || NaN) : goal
+  return typeof n === 'number' && Number.isInteger(n) && n >= 1 ? n : undefined
 }
 
-export async function renameChecklistItem(db: BabyDb, id: number, title: string): Promise<void> {
-  const trimmed = title.trim()
-  if (!trimmed) return
-  await db.checklistItems.update(id, { title: trimmed })
+export function normalizeNote(note: unknown): string | undefined {
+  return typeof note === 'string' && note.trim() ? note.trim() : undefined
+}
+
+export async function addChecklistItem(
+  db: BabyDb,
+  fields: ChecklistItemFields,
+  now = Date.now(),
+): Promise<number | undefined> {
+  const title = fields.title.trim()
+  if (!title) return undefined
+  const last = await db.checklistItems.orderBy('order').last()
+  return db.checklistItems.add({
+    title,
+    goal: normalizeGoal(fields.goal),
+    note: normalizeNote(fields.note),
+    order: (last?.order ?? -1) + 1,
+    createdAt: now,
+  })
+}
+
+/** Atualiza título, meta e observação. Título vazio é ignorado (nada muda). */
+export async function updateChecklistItem(db: BabyDb, id: number, fields: ChecklistItemFields): Promise<void> {
+  const title = fields.title.trim()
+  if (!title) return
+  // No Dexie, campo undefined no update apaga o campo: meta/observação removidas somem do registro.
+  await db.checklistItems.update(id, {
+    title,
+    goal: normalizeGoal(fields.goal),
+    note: normalizeNote(fields.note),
+  })
 }
 
 /** Remove o item junto com todo o histórico de toques dele. */

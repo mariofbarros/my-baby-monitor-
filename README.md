@@ -31,7 +31,10 @@ Works in a phone browser and can be installed to the Android home screen
 
 **Checklist**
 - A personal list of daily actions (e.g. "Drink water", "Take vitamin") with
-  editable titles; items can be added, renamed, and removed
+  editable titles; items can be added, edited, and removed
+- Each item can have an optional daily goal (e.g. 8 times a day) and a
+  free-text note; the counter shows progress like 3/8 and turns green when
+  the day's goal is met
 - Tap + to count each time the action is done today, − to undo the last tap
 - Counts start over each calendar day; the last 7 days are shown in a small
   history table

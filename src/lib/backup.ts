@@ -1,3 +1,4 @@
+import { normalizeGoal, normalizeNote } from './checklist'
 import type { BabyDb } from './db'
 import { todayIso } from './time'
 import type { DiaperType, FeedingMethod, Side } from './types'
@@ -8,7 +9,7 @@ export type ParsedBackup = {
   measurements: { date: string; weightGrams?: number; heightCm?: number }[]
   profile: { name: string; birthDate?: string } | null
   /** `id` é o do aparelho de origem; só serve para ligar os toques ao item. */
-  checklistItems: { id: number; title: string; order: number; createdAt: number }[]
+  checklistItems: { id: number; title: string; goal?: number; note?: string; order: number; createdAt: number }[]
   checklistLogs: { itemId: number; timestamp: number }[]
 }
 
@@ -96,6 +97,8 @@ export function parseBackup(parsed: unknown): ParsedBackup {
       return {
         id: r.id,
         title: r.title.trim(),
+        goal: normalizeGoal(r.goal),
+        note: normalizeNote(r.note),
         order: typeof r.order === 'number' ? r.order : index,
         createdAt: typeof r.createdAt === 'number' ? r.createdAt : 0,
       }
@@ -160,7 +163,13 @@ export async function applyBackup(db: BabyDb, backup: ParsedBackup, mode: Import
     for (const item of [...checklistItems].sort((a, b) => a.order - b.order)) {
       let id = idByTitle.get(item.title)
       if (id == null) {
-        id = (await db.checklistItems.add({ title: item.title, order: nextOrder++, createdAt: item.createdAt })) as number
+        id = (await db.checklistItems.add({
+          title: item.title,
+          goal: item.goal,
+          note: item.note,
+          order: nextOrder++,
+          createdAt: item.createdAt,
+        })) as number
         idByTitle.set(item.title, id)
       }
       newIdBySourceId.set(item.id, id)

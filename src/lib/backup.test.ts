@@ -28,7 +28,7 @@ async function seed(target: BabyDb) {
     { type: 'both', timestamp: 8000 },
   ])
   await target.measurements.add({ date: '2026-08-10', weightGrams: 3500, heightCm: 50 })
-  const water = await target.checklistItems.add({ title: 'Água', order: 0, createdAt: 100 })
+  const water = await target.checklistItems.add({ title: 'Água', goal: 8, note: '300 ml', order: 0, createdAt: 100 })
   const vitamin = await target.checklistItems.add({ title: 'Vitamina', order: 1, createdAt: 200 })
   await target.checklistLogs.bulkAdd([
     { itemId: water!, timestamp: 9000 },
@@ -43,7 +43,7 @@ async function checklistSnapshot(target: BabyDb) {
   const titleById = new Map(items.map((i) => [i.id, i.title]))
   const logs = await target.checklistLogs.orderBy('timestamp').toArray()
   return {
-    items: items.map((i) => i.title),
+    items: items.map((i) => [i.title, i.goal, i.note]),
     logs: logs.map((l) => [titleById.get(l.itemId), l.timestamp]),
   }
 }
@@ -161,7 +161,20 @@ describe('parseBackup do checklist', () => {
 
   it('aceita backup só com checklist', () => {
     expect(parseBackup({ checklistItems: [{ id: 1, title: 'Água' }] }).checklistItems).toEqual([
-      { id: 1, title: 'Água', order: 0, createdAt: 0 },
+      { id: 1, title: 'Água', goal: undefined, note: undefined, order: 0, createdAt: 0 },
+    ])
+  })
+
+  it('lê meta e observação, ignorando meta inválida', () => {
+    const { checklistItems } = parseBackup({
+      checklistItems: [
+        { id: 1, title: 'Água', goal: 8, note: '300 ml' },
+        { id: 2, title: 'Banho', goal: 0, note: 42 },
+      ],
+    })
+    expect(checklistItems.map((i) => [i.goal, i.note])).toEqual([
+      [8, '300 ml'],
+      [undefined, undefined],
     ])
   })
 
@@ -249,7 +262,7 @@ describe('applyBackup', () => {
 describe('applyBackup do checklist', () => {
   const incoming = parseBackup({
     checklistItems: [
-      { id: 50, title: 'Água', order: 0 },
+      { id: 50, title: 'Água', goal: 2, order: 0 },
       { id: 51, title: 'Banho', order: 1 },
     ],
     checklistLogs: [
@@ -263,7 +276,11 @@ describe('applyBackup do checklist', () => {
     await applyBackup(db, incoming, 'add')
 
     expect(await checklistSnapshot(db)).toEqual({
-      items: ['Água', 'Vitamina', 'Banho'],
+      items: [
+        ['Água', 8, '300 ml'],
+        ['Vitamina', undefined, undefined],
+        ['Banho', undefined, undefined],
+      ],
       logs: [
         ['Água', 400],
         ['Banho', 500],
@@ -279,7 +296,10 @@ describe('applyBackup do checklist', () => {
     await applyBackup(db, incoming, 'replace')
 
     expect(await checklistSnapshot(db)).toEqual({
-      items: ['Água', 'Banho'],
+      items: [
+        ['Água', 2, undefined],
+        ['Banho', undefined, undefined],
+      ],
       logs: [
         ['Água', 400],
         ['Banho', 500],

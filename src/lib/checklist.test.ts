@@ -7,10 +7,11 @@ import {
   countKey,
   incrementChecklistItem,
   lastDays,
+  normalizeGoal,
   removeChecklistItem,
-  renameChecklistItem,
   startOfDay,
   undoChecklistItem,
+  updateChecklistItem,
 } from './checklist'
 import { type BabyDb, createDb } from './db'
 
@@ -33,9 +34,9 @@ function at(day: number, hour: number, minute = 0) {
 
 describe('itens', () => {
   it('adiciona no fim da lista, ignorando espaços e títulos vazios', async () => {
-    await addChecklistItem(db, '  Vitamina D  ')
-    await addChecklistItem(db, '   ')
-    await addChecklistItem(db, 'Água')
+    await addChecklistItem(db, { title: '  Vitamina D  ' })
+    await addChecklistItem(db, { title: '   ' })
+    await addChecklistItem(db, { title: 'Água' })
 
     const items = await db.checklistItems.orderBy('order').toArray()
     expect(items.map((i) => [i.title, i.order])).toEqual([
@@ -44,16 +45,36 @@ describe('itens', () => {
     ])
   })
 
-  it('renomeia, mas não aceita título vazio', async () => {
-    const id = (await addChecklistItem(db, 'Vitamina'))!
-    await renameChecklistItem(db, id, ' Vitamina D ')
-    await renameChecklistItem(db, id, '')
-    expect((await db.checklistItems.get(id))?.title).toBe('Vitamina D')
+  it('guarda meta e observação quando informadas', async () => {
+    const withGoal = (await addChecklistItem(db, { title: 'Água', goal: '8', note: '  copo de 300 ml ' }))!
+    const without = (await addChecklistItem(db, { title: 'Banho', goal: '', note: '   ' }))!
+
+    expect(await db.checklistItems.get(withGoal)).toMatchObject({ goal: 8, note: 'copo de 300 ml' })
+    const plain = await db.checklistItems.get(without)
+    expect(plain?.goal).toBeUndefined()
+    expect(plain?.note).toBeUndefined()
+  })
+
+  it('edita título, meta e observação, e apaga meta/observação deixadas em branco', async () => {
+    const id = (await addChecklistItem(db, { title: 'Vitamina', goal: 1, note: 'depois do almoço' }))!
+    await updateChecklistItem(db, id, { title: ' Vitamina D ', goal: '2', note: 'antes do almoço' })
+    expect(await db.checklistItems.get(id)).toMatchObject({ title: 'Vitamina D', goal: 2, note: 'antes do almoço' })
+
+    await updateChecklistItem(db, id, { title: 'Vitamina D', goal: '', note: '' })
+    const item = await db.checklistItems.get(id)
+    expect(item).not.toHaveProperty('goal')
+    expect(item).not.toHaveProperty('note')
+  })
+
+  it('não aceita título vazio na edição', async () => {
+    const id = (await addChecklistItem(db, { title: 'Vitamina', goal: 3 }))!
+    await updateChecklistItem(db, id, { title: '  ', goal: 5 })
+    expect(await db.checklistItems.get(id)).toMatchObject({ title: 'Vitamina', goal: 3 })
   })
 
   it('remover apaga o item e só os toques dele', async () => {
-    const a = (await addChecklistItem(db, 'A'))!
-    const b = (await addChecklistItem(db, 'B'))!
+    const a = (await addChecklistItem(db, { title: 'A' }))!
+    const b = (await addChecklistItem(db, { title: 'B' }))!
     await incrementChecklistItem(db, a, at(10, 8))
     await incrementChecklistItem(db, b, at(10, 9))
     await incrementChecklistItem(db, a, at(11, 8))
@@ -65,9 +86,18 @@ describe('itens', () => {
   })
 })
 
+describe('normalizeGoal', () => {
+  it('aceita só inteiros a partir de 1', () => {
+    expect(['8', 8, ' 3 '].map(normalizeGoal)).toEqual([8, 8, 3])
+    expect(['', '0', '-2', '2.5', 'abc', 0, 1.5, null, undefined].map(normalizeGoal)).toEqual(
+      Array(9).fill(undefined),
+    )
+  })
+})
+
 describe('contagem por dia', () => {
   it('zera no dia seguinte e mantém o histórico de cada dia', async () => {
-    const id = (await addChecklistItem(db, 'Água'))!
+    const id = (await addChecklistItem(db, { title: 'Água' }))!
     await incrementChecklistItem(db, id, at(10, 0, 0))
     await incrementChecklistItem(db, id, at(10, 23, 59))
     await incrementChecklistItem(db, id, at(11, 0, 1))
@@ -86,7 +116,7 @@ describe('contagem por dia', () => {
 
 describe('desfazer', () => {
   it('remove o toque mais recente de hoje', async () => {
-    const id = (await addChecklistItem(db, 'Água'))!
+    const id = (await addChecklistItem(db, { title: 'Água' }))!
     await incrementChecklistItem(db, id, at(29, 8))
     await incrementChecklistItem(db, id, at(29, 10))
 
@@ -95,8 +125,8 @@ describe('desfazer', () => {
   })
 
   it('não apaga toques de dias anteriores nem de outros itens', async () => {
-    const a = (await addChecklistItem(db, 'A'))!
-    const b = (await addChecklistItem(db, 'B'))!
+    const a = (await addChecklistItem(db, { title: 'A' }))!
+    const b = (await addChecklistItem(db, { title: 'B' }))!
     await incrementChecklistItem(db, a, at(28, 22))
     await incrementChecklistItem(db, b, at(29, 9))
 

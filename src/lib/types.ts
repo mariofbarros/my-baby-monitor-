@@ -44,6 +44,10 @@ export interface Measurement {
 export interface ChecklistItem {
   id?: number
   title: string
+  /** Quantas vezes por dia a pessoa quer fazer a ação. Ausente = sem meta. */
+  goal?: number
+  /** Descrição ou observação livre. */
+  note?: string
   order: number
   createdAt: number // epoch ms
 }

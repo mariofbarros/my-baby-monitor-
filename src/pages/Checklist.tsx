@@ -8,10 +8,10 @@ import {
   incrementChecklistItem,
   lastDays,
   removeChecklistItem,
-  renameChecklistItem,
   startOfDay,
   startOfNextDay,
   undoChecklistItem,
+  updateChecklistItem,
 } from '../lib/checklist'
 import { db } from '../lib/db'
 import { formatClock } from '../lib/time'
@@ -52,14 +52,7 @@ export default function Checklist() {
     }
   }
 
-  const [newTitle, setNewTitle] = useState('')
-
-  async function handleAdd(e: React.FormEvent) {
-    e.preventDefault()
-    if (!newTitle.trim()) return
-    await addChecklistItem(db, newTitle)
-    setNewTitle('')
-  }
+  const [adding, setAdding] = useState(false)
 
   return (
     <div>
@@ -88,17 +81,29 @@ export default function Checklist() {
           </div>
         )}
 
-        <form onSubmit={handleAdd} style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-          <input
-            aria-label="Novo item"
-            placeholder="Novo item"
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-          />
-          <button type="submit" className="btn btn-primary" disabled={!newTitle.trim()}>
-            Adicionar
+        {adding ? (
+          <div className="card" style={{ marginTop: 12 }}>
+            <p style={{ fontWeight: 700, marginBottom: 12 }}>Novo item</p>
+            <ItemForm
+              idPrefix="checklist-new"
+              submitLabel="Adicionar"
+              onCancel={() => setAdding(false)}
+              onSubmit={async (fields) => {
+                await addChecklistItem(db, fields)
+                setAdding(false)
+              }}
+            />
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-outline"
+            style={{ width: '100%', marginTop: 12 }}
+            onClick={() => setAdding(true)}
+          >
+            + Novo item
           </button>
-        </form>
+        )}
 
         {items && items.length > 0 && (
           <>
@@ -119,8 +124,9 @@ export default function Checklist() {
                       <td className="checklist-history-title">{item.title}</td>
                       {days.map((day) => {
                         const count = counts.get(countKey(item.id!, day)) ?? 0
+                        const className = count === 0 ? 'zero' : item.goal && count >= item.goal ? 'done' : undefined
                         return (
-                          <td key={day} className={count === 0 ? 'zero' : undefined}>
+                          <td key={day} className={className}>
                             {count}
                           </td>
                         )
@@ -137,21 +143,84 @@ export default function Checklist() {
   )
 }
 
+type ItemFormValues = { title: string; goal: string; note: string }
+
+/** Campos de um item (título, meta diária opcional, observação opcional), para criar ou editar. */
+function ItemForm({
+  idPrefix,
+  initial = { title: '', goal: '', note: '' },
+  submitLabel,
+  onSubmit,
+  onCancel,
+  children,
+}: {
+  idPrefix: string
+  initial?: ItemFormValues
+  submitLabel: string
+  onSubmit: (values: ItemFormValues) => Promise<void>
+  onCancel: () => void
+  children?: React.ReactNode
+}) {
+  const [values, setValues] = useState(initial)
+  const set = (field: keyof ItemFormValues) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setValues((v) => ({ ...v, [field]: e.target.value }))
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!values.title.trim()) return
+    await onSubmit(values)
+  }
+
+  return (
+    <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div>
+        <label htmlFor={`${idPrefix}-title`}>Título</label>
+        <input
+          id={`${idPrefix}-title`}
+          value={values.title}
+          onChange={set('title')}
+          placeholder="Ex.: Beber água"
+          autoFocus
+        />
+      </div>
+      <div>
+        <label htmlFor={`${idPrefix}-goal`}>Meta por dia (opcional)</label>
+        <input
+          id={`${idPrefix}-goal`}
+          type="number"
+          inputMode="numeric"
+          min={1}
+          step={1}
+          value={values.goal}
+          onChange={set('goal')}
+          placeholder="Quantas vezes por dia?"
+        />
+      </div>
+      <div>
+        <label htmlFor={`${idPrefix}-note`}>Observação (opcional)</label>
+        <textarea
+          id={`${idPrefix}-note`}
+          rows={2}
+          value={values.note}
+          onChange={set('note')}
+          placeholder="Descrição ou lembrete"
+        />
+      </div>
+      <div className="edit-row-buttons">
+        <button type="button" className="btn btn-outline" onClick={onCancel}>
+          Cancelar
+        </button>
+        <button type="submit" className="btn btn-primary" disabled={!values.title.trim()}>
+          {submitLabel}
+        </button>
+      </div>
+      {children}
+    </form>
+  )
+}
+
 function ChecklistRow({ item, count, lastAt }: { item: ChecklistItem; count: number; lastAt?: number }) {
   const [editing, setEditing] = useState(false)
-  const [title, setTitle] = useState(item.title)
-
-  function startEdit() {
-    setTitle(item.title)
-    setEditing(true)
-  }
-
-  async function save(e: React.FormEvent) {
-    e.preventDefault()
-    if (item.id == null || !title.trim()) return
-    await renameChecklistItem(db, item.id, title)
-    setEditing(false)
-  }
 
   async function remove() {
     if (item.id == null) return
@@ -162,42 +231,46 @@ function ChecklistRow({ item, count, lastAt }: { item: ChecklistItem; count: num
 
   if (editing) {
     return (
-      <form className="edit-row" onSubmit={save}>
-        <div>
-          <label htmlFor={`checklist-${item.id}`}>Título</label>
-          <input id={`checklist-${item.id}`} value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
-        </div>
-        <div className="edit-row-buttons">
-          <button type="button" className="btn btn-outline" onClick={() => setEditing(false)}>
-            Cancelar
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={!title.trim()}>
-            Salvar
-          </button>
-        </div>
-        <button
-          type="button"
-          className="btn btn-outline"
-          style={{ color: 'var(--danger)', padding: '9px 12px', fontSize: 13 }}
-          onClick={remove}
+      <div className="edit-row">
+        <ItemForm
+          idPrefix={`checklist-${item.id}`}
+          initial={{ title: item.title, goal: item.goal ? String(item.goal) : '', note: item.note ?? '' }}
+          submitLabel="Salvar"
+          onCancel={() => setEditing(false)}
+          onSubmit={async (fields) => {
+            if (item.id != null) await updateChecklistItem(db, item.id, fields)
+            setEditing(false)
+          }}
         >
-          Remover item
-        </button>
-      </form>
+          <button
+            type="button"
+            className="btn btn-outline"
+            style={{ color: 'var(--danger)', padding: '9px 12px', fontSize: 13 }}
+            onClick={remove}
+          >
+            Remover item
+          </button>
+        </ItemForm>
+      </div>
     )
   }
+
+  const goalMet = item.goal != null && count >= item.goal
+  let status = lastAt ? `Última às ${formatClock(lastAt)}` : 'Nenhuma vez hoje'
+  if (item.goal && !goalMet) status = `Faltam ${item.goal - count} · ${status.toLowerCase()}`
 
   return (
     <div className="list-item" style={{ gap: 10 }}>
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <p style={{ fontWeight: 600, overflowWrap: 'anywhere' }}>{item.title}</p>
-          <button type="button" className="icon-btn" onClick={startEdit} aria-label={`Editar ${item.title}`}>
+          <button type="button" className="icon-btn" onClick={() => setEditing(true)} aria-label={`Editar ${item.title}`}>
             <PencilIcon />
           </button>
         </div>
-        <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-          {lastAt ? `Última às ${formatClock(lastAt)}` : 'Nenhuma vez hoje'}
+        {item.note && <p className="checklist-note">{item.note}</p>}
+        <p style={{ fontSize: 12, color: goalMet ? 'var(--success)' : 'var(--text-muted)', fontWeight: goalMet ? 600 : 400 }}>
+          {goalMet ? 'Meta do dia cumprida ✓' : status}
         </p>
       </div>
       <div className="counter">
@@ -210,8 +283,9 @@ function ChecklistRow({ item, count, lastAt }: { item: ChecklistItem; count: num
         >
           −
         </button>
-        <span className="counter-value" aria-live="polite">
+        <span className="counter-value" aria-live="polite" style={goalMet ? { color: 'var(--success)' } : undefined}>
           {count}
+          {item.goal != null && <span className="counter-goal">/{item.goal}</span>}
         </span>
         <button
           type="button"

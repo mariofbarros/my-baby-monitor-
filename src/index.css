@@ -167,7 +167,8 @@ a {
 }
 
 input,
-select {
+select,
+textarea {
   font-family: inherit;
   font-size: 16px;
   padding: 10px 12px;
@@ -179,7 +180,8 @@ select {
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
 }
@@ -523,4 +525,26 @@ label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.counter-goal {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.checklist-note {
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 2px 0 4px;
+}
+
+.checklist-history td.done {
+  color: var(--success);
 }
