@@ -29,6 +29,11 @@ jobs:
 
       - run: npm ci
 
+      # Se o lint ou algum teste falhar, o deploy não acontece.
+      - run: npm run lint
+
+      - run: npm test
+
       - run: npm run build
 
       # Requer o Pages ativado uma vez em Settings > Pages,
