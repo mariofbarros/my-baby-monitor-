@@ -28,6 +28,24 @@ async function seed(target: BabyDb) {
     { type: 'both', timestamp: 8000 },
   ])
   await target.measurements.add({ date: '2026-08-10', weightGrams: 3500, heightCm: 50 })
+  const water = await target.checklistItems.add({ title: 'Água', order: 0, createdAt: 100 })
+  const vitamin = await target.checklistItems.add({ title: 'Vitamina', order: 1, createdAt: 200 })
+  await target.checklistLogs.bulkAdd([
+    { itemId: water!, timestamp: 9000 },
+    { itemId: water!, timestamp: 9500 },
+    { itemId: vitamin!, timestamp: 9600 },
+  ])
+}
+
+/** Toques do checklist como [título, horário], independente dos ids de cada banco. */
+async function checklistSnapshot(target: BabyDb) {
+  const items = await target.checklistItems.orderBy('order').toArray()
+  const titleById = new Map(items.map((i) => [i.id, i.title]))
+  const logs = await target.checklistLogs.orderBy('timestamp').toArray()
+  return {
+    items: items.map((i) => i.title),
+    logs: logs.map((l) => [titleById.get(l.itemId), l.timestamp]),
+  }
 }
 
 /** Registros sem o id autoincremento, para comparar dados entre bancos. */
@@ -44,6 +62,8 @@ describe('buildBackup', () => {
     expect(backup.feedings).toHaveLength(3)
     expect(backup.diapers).toHaveLength(2)
     expect(backup.measurements).toHaveLength(1)
+    expect(backup.checklistItems).toHaveLength(2)
+    expect(backup.checklistLogs).toHaveLength(3)
     expect(Number.isNaN(Date.parse(backup.exportedAt))).toBe(false)
   })
 
@@ -66,6 +86,7 @@ describe('exportar → importar (ida e volta)', () => {
       expect(stripIds(await other.feedings.toArray())).toEqual(stripIds(await db.feedings.toArray()))
       expect(stripIds(await other.diapers.toArray())).toEqual(stripIds(await db.diapers.toArray()))
       expect(stripIds(await other.measurements.toArray())).toEqual(stripIds(await db.measurements.toArray()))
+      expect(await checklistSnapshot(other)).toEqual(await checklistSnapshot(db))
     } finally {
       other.close()
       await Dexie.delete(other.name)
@@ -131,12 +152,48 @@ describe('parseBackup', () => {
   })
 })
 
+describe('parseBackup do checklist', () => {
+  it('aceita backup antigo sem checklist', () => {
+    const result = parseBackup({ diapers: [{ type: 'pee', timestamp: 1 }] })
+    expect(result.checklistItems).toEqual([])
+    expect(result.checklistLogs).toEqual([])
+  })
+
+  it('aceita backup só com checklist', () => {
+    expect(parseBackup({ checklistItems: [{ id: 1, title: 'Água' }] }).checklistItems).toEqual([
+      { id: 1, title: 'Água', order: 0, createdAt: 0 },
+    ])
+  })
+
+  it('descarta itens inválidos e toques de itens que não vieram no arquivo', () => {
+    const result = parseBackup({
+      checklistItems: [{ id: 1, title: 'Água', order: 0 }, { id: 2, title: '  ' }, { title: 'Sem id' }],
+      checklistLogs: [
+        { itemId: 1, timestamp: 10 },
+        { itemId: 2, timestamp: 11 },
+        { itemId: 99, timestamp: 12 },
+        { itemId: 1, timestamp: '13' },
+      ],
+    })
+    expect(result.checklistItems.map((i) => i.title)).toEqual(['Água'])
+    expect(result.checklistLogs).toEqual([{ itemId: 1, timestamp: 10 }])
+  })
+})
+
 describe('applyBackup', () => {
   const incoming = parseBackup({
     profile: { name: 'Bia', birthDate: '2026-09-01' },
     feedings: [{ method: 'bottle', startTime: 100, endTime: 200, durationSeconds: 1 }],
     diapers: [{ type: 'poop', timestamp: 300 }],
     measurements: [{ date: '2026-09-02', heightCm: 49 }],
+    checklistItems: [
+      { id: 50, title: 'Água', order: 0 },
+      { id: 51, title: 'Banho', order: 1 },
+    ],
+    checklistLogs: [
+      { itemId: 50, timestamp: 400 },
+      { itemId: 51, timestamp: 500 },
+    ],
   })
 
   it('"adicionar" soma aos dados atuais e mantém o perfil existente', async () => {
@@ -186,5 +243,47 @@ describe('applyBackup', () => {
 
     expect(await db.feedings.count()).toBe(3)
     expect((await db.profile.get(1))?.name).toBe('Ana')
+  })
+})
+
+describe('applyBackup do checklist', () => {
+  const incoming = parseBackup({
+    checklistItems: [
+      { id: 50, title: 'Água', order: 0 },
+      { id: 51, title: 'Banho', order: 1 },
+    ],
+    checklistLogs: [
+      { itemId: 50, timestamp: 400 },
+      { itemId: 51, timestamp: 500 },
+    ],
+  })
+
+  it('"adicionar" junta toques no item de mesmo título e cria os que faltam no fim', async () => {
+    await seed(db)
+    await applyBackup(db, incoming, 'add')
+
+    expect(await checklistSnapshot(db)).toEqual({
+      items: ['Água', 'Vitamina', 'Banho'],
+      logs: [
+        ['Água', 400],
+        ['Banho', 500],
+        ['Água', 9000],
+        ['Água', 9500],
+        ['Vitamina', 9600],
+      ],
+    })
+  })
+
+  it('"substituir" apaga o checklist atual', async () => {
+    await seed(db)
+    await applyBackup(db, incoming, 'replace')
+
+    expect(await checklistSnapshot(db)).toEqual({
+      items: ['Água', 'Banho'],
+      logs: [
+        ['Água', 400],
+        ['Banho', 500],
+      ],
+    })
   })
 })

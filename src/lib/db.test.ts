@@ -47,7 +47,7 @@ describe('migração v1 → v2', () => {
     const db = createDb(DB_NAME)
 
     await db.open()
-    expect(db.verno).toBe(2)
+    expect(db.verno).toBe(3)
     expect(await db.profile.get(1)).toEqual({ id: 1, name: 'Ana', birthDate: '2026-08-01' })
     expect(await db.diapers.toArray()).toEqual([{ id: 1, type: 'pee', timestamp: 6000 }])
     expect(await db.measurements.toArray()).toEqual([{ id: 1, date: '2026-08-10', weightGrams: 3500 }])
@@ -68,11 +68,40 @@ describe('migração v1 → v2', () => {
     db.close()
   })
 
-  it('cria um banco novo direto na v2', async () => {
+  it('cria um banco novo direto na versão atual', async () => {
     const db = createDb(DB_NAME)
     await db.open()
-    expect(db.verno).toBe(2)
+    expect(db.verno).toBe(3)
     expect(await db.feedings.count()).toBe(0)
+    db.close()
+  })
+})
+
+describe('migração v2 → v3 (checklist)', () => {
+  it('cria as tabelas do checklist vazias sem mexer nos dados existentes', async () => {
+    const v2 = new Dexie(DB_NAME)
+    v2.version(2).stores({
+      profile: 'id',
+      feedings: '++id, startTime, side',
+      activeFeeding: 'id',
+      diapers: '++id, timestamp, type',
+      measurements: '++id, date',
+    })
+    await v2.table('profile').put({ id: 1, name: 'Ana', birthDate: '2026-08-01' })
+    await v2.table('feedings').add({ method: 'bottle', startTime: 1000, endTime: 2000, durationSeconds: 1 })
+    await v2.table('diapers').add({ type: 'poop', timestamp: 3000 })
+    v2.close()
+
+    const db = createDb(DB_NAME)
+    await db.open()
+    expect(db.verno).toBe(3)
+    expect(await db.checklistItems.count()).toBe(0)
+    expect(await db.checklistLogs.count()).toBe(0)
+    expect(await db.profile.get(1)).toEqual({ id: 1, name: 'Ana', birthDate: '2026-08-01' })
+    expect(await db.feedings.toArray()).toEqual([
+      { id: 1, method: 'bottle', startTime: 1000, endTime: 2000, durationSeconds: 1 },
+    ])
+    expect(await db.diapers.toArray()).toEqual([{ id: 1, type: 'poop', timestamp: 3000 }])
     db.close()
   })
 })

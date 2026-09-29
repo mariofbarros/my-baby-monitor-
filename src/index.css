@@ -439,3 +439,88 @@ label {
   font-weight: 600;
   margin-top: 2px;
 }
+
+.counter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.counter-value {
+  min-width: 28px;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.counter-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.06s ease;
+}
+
+.counter-btn:active {
+  transform: scale(0.92);
+}
+
+.counter-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.counter-btn-plus {
+  width: 48px;
+  height: 48px;
+  border: none;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 26px;
+}
+
+.checklist-history {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.checklist-history th {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 0 4px 8px;
+  text-transform: capitalize;
+}
+
+.checklist-history td {
+  text-align: center;
+  padding: 8px 4px;
+  border-top: 1px solid var(--border);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.checklist-history td.zero {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.checklist-history .checklist-history-title {
+  text-align: left;
+  font-weight: 600;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

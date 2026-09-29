@@ -39,3 +39,18 @@ export interface Measurement {
   weightGrams?: number
   heightCm?: number
 }
+
+/** Ação do checklist pessoal ("Trocar a água", "Tomar vitamina"...). */
+export interface ChecklistItem {
+  id?: number
+  title: string
+  order: number
+  createdAt: number // epoch ms
+}
+
+/** Um toque no item: a contagem do dia é o número de registros dentro dele. */
+export interface ChecklistLog {
+  id?: number
+  itemId: number
+  timestamp: number // epoch ms
+}
