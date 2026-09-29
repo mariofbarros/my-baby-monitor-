@@ -50,6 +50,7 @@ server. The "Baby" tab has an option to export all records as a JSON backup.
 npm install
 npm run dev      # local dev server at http://localhost:5173
 npm run build    # production build in dist/
+npm test         # run the test suite (Vitest)
 npm run preview  # serve the production build
 ```
 

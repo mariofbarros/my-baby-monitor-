@@ -1,7 +1,7 @@
 import Dexie, { type EntityTable } from 'dexie'
 import type { ActiveFeeding, BabyProfile, DiaperChange, FeedingSession, Measurement } from './types'
 
-const db = new Dexie('baby-monitor') as Dexie & {
+export type BabyDb = Dexie & {
   profile: EntityTable<BabyProfile, 'id'>
   feedings: EntityTable<FeedingSession, 'id'>
   activeFeeding: EntityTable<ActiveFeeding, 'id'>
@@ -9,39 +9,46 @@ const db = new Dexie('baby-monitor') as Dexie & {
   measurements: EntityTable<Measurement, 'id'>
 }
 
-db.version(1).stores({
-  profile: 'id',
-  feedings: '++id, startTime, side',
-  activeFeeding: 'id',
-  diapers: '++id, timestamp, type',
-  measurements: '++id, date',
-})
+/** Declara o schema e as migrações. Exportado para os testes abrirem bancos isolados. */
+export function createDb(name: string): BabyDb {
+  const db = new Dexie(name) as BabyDb
 
-// Introduz a modalidade da mamada (peito/mamadeira/misto). Registros já
-// salvos não têm esse campo — todos eram peito, então preenchemos com
-// 'breast' em vez de deixar `method` ausente e cada tela ter que lidar
-// com o caso "registro antigo" espalhado pelo código.
-db.version(2)
-  .stores({
+  db.version(1).stores({
     profile: 'id',
     feedings: '++id, startTime, side',
     activeFeeding: 'id',
     diapers: '++id, timestamp, type',
     measurements: '++id, date',
   })
-  .upgrade(async (tx) => {
-    await tx
-      .table('feedings')
-      .toCollection()
-      .modify((f) => {
-        if (!f.method) f.method = 'breast'
-      })
-    await tx
-      .table('activeFeeding')
-      .toCollection()
-      .modify((f) => {
-        if (!f.method) f.method = 'breast'
-      })
-  })
 
-export { db }
+  // Introduz a modalidade da mamada (peito/mamadeira/misto). Registros já
+  // salvos não têm esse campo — todos eram peito, então preenchemos com
+  // 'breast' em vez de deixar `method` ausente e cada tela ter que lidar
+  // com o caso "registro antigo" espalhado pelo código.
+  db.version(2)
+    .stores({
+      profile: 'id',
+      feedings: '++id, startTime, side',
+      activeFeeding: 'id',
+      diapers: '++id, timestamp, type',
+      measurements: '++id, date',
+    })
+    .upgrade(async (tx) => {
+      await tx
+        .table('feedings')
+        .toCollection()
+        .modify((f) => {
+          if (!f.method) f.method = 'breast'
+        })
+      await tx
+        .table('activeFeeding')
+        .toCollection()
+        .modify((f) => {
+          if (!f.method) f.method = 'breast'
+        })
+    })
+
+  return db
+}
+
+export const db = createDb('baby-monitor')
