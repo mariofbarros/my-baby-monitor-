@@ -21,8 +21,9 @@ async function seed(target: BabyDb) {
   await target.feedings.bulkAdd([
     { method: 'breast', side: 'left', startTime: 1000, endTime: 2000, durationSeconds: 1 },
     { method: 'bottle', startTime: 3000, endTime: 4000, durationSeconds: 1 },
-    { method: 'mixed', side: 'right', startTime: 5000, endTime: 6000, durationSeconds: 1 },
+    { method: 'mixed', side: 'right', startTime: 5000, endTime: 6000, durationSeconds: 1, autoEnded: true },
   ])
+  await target.settings.put({ id: 1, maxFeedingMinutes: 45 })
   await target.diapers.bulkAdd([
     { type: 'pee', timestamp: 7000 },
     { type: 'both', timestamp: 8000 },
@@ -87,6 +88,8 @@ describe('exportar → importar (ida e volta)', () => {
       expect(stripIds(await other.diapers.toArray())).toEqual(stripIds(await db.diapers.toArray()))
       expect(stripIds(await other.measurements.toArray())).toEqual(stripIds(await db.measurements.toArray()))
       expect(await checklistSnapshot(other)).toEqual(await checklistSnapshot(db))
+      expect(await other.settings.get(1)).toEqual({ id: 1, maxFeedingMinutes: 45 })
+      expect((await other.feedings.where('startTime').equals(5000).first())?.autoEnded).toBe(true)
     } finally {
       other.close()
       await Dexie.delete(other.name)
@@ -305,5 +308,56 @@ describe('applyBackup do checklist', () => {
         ['Banho', 500],
       ],
     })
+  })
+})
+
+describe('backup do tempo máximo de mamada', () => {
+  it('exporta o limite, ou vazio quando desligado', async () => {
+    expect((await buildBackup(db)).settings).toEqual({ maxFeedingMinutes: undefined })
+    await db.settings.put({ id: 1, maxFeedingMinutes: 50 })
+    expect((await buildBackup(db)).settings).toEqual({ maxFeedingMinutes: 50 })
+  })
+
+  it('backup antigo sem preferências não mexe no limite atual', async () => {
+    await db.settings.put({ id: 1, maxFeedingMinutes: 50 })
+    const old = parseBackup({ diapers: [{ type: 'pee', timestamp: 1 }] })
+    expect(old.settings).toBeNull()
+    await applyBackup(db, old, 'add')
+    expect(await db.settings.get(1)).toEqual({ id: 1, maxFeedingMinutes: 50 })
+  })
+
+  it('ignora limite inválido no arquivo', () => {
+    expect(parseBackup({ profile: { name: 'Ana' }, settings: { maxFeedingMinutes: -3 } }).settings).toEqual({
+      maxFeedingMinutes: undefined,
+    })
+  })
+
+  it('"adicionar" só usa o limite do arquivo se o aparelho não tiver um', async () => {
+    const file = parseBackup({ profile: { name: 'Ana' }, settings: { maxFeedingMinutes: 30 } })
+    await applyBackup(db, file, 'add')
+    expect((await db.settings.get(1))?.maxFeedingMinutes).toBe(30)
+
+    await db.settings.put({ id: 1, maxFeedingMinutes: 50 })
+    await applyBackup(db, file, 'add')
+    expect((await db.settings.get(1))?.maxFeedingMinutes).toBe(50)
+  })
+
+  it('"substituir" adota o limite do arquivo, inclusive desligado', async () => {
+    await db.settings.put({ id: 1, maxFeedingMinutes: 50 })
+    await applyBackup(db, parseBackup({ profile: { name: 'Ana' }, settings: { maxFeedingMinutes: 30 } }), 'replace')
+    expect((await db.settings.get(1))?.maxFeedingMinutes).toBe(30)
+
+    await applyBackup(db, parseBackup({ profile: { name: 'Ana' }, settings: {} }), 'replace')
+    expect(await db.settings.get(1)).toBeUndefined()
+  })
+
+  it('só guarda "encerrada automaticamente" quando o valor é true', () => {
+    const { feedings } = parseBackup({
+      feedings: [
+        { method: 'bottle', startTime: 1, endTime: 2, durationSeconds: 1, autoEnded: true },
+        { method: 'bottle', startTime: 3, endTime: 4, durationSeconds: 1, autoEnded: 'sim' },
+      ],
+    })
+    expect(feedings.map((f) => f.autoEnded)).toEqual([true, undefined])
   })
 })

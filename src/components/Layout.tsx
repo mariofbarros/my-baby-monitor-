@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
+import { useFeedingAutoEnd } from '../lib/useFeedingAutoEnd'
 import { ChecklistIcon, DiaperIcon, FeedingIcon, GrowthIcon, HomeIcon, SettingsIcon } from './Icons'
 
 const NAV_ITEMS = [
@@ -11,6 +12,9 @@ const NAV_ITEMS = [
 ]
 
 export default function Layout() {
+  // Fica no layout para valer em qualquer aba, não só em Mamadas.
+  useFeedingAutoEnd()
+
   return (
     <>
       <div className="page-shell">

@@ -16,6 +16,9 @@ Works in a phone browser and can be installed to the Android home screen
 - Automatic suggestion for the next breast, alternating from the last breast/mixed
   feeding (bottle-only feedings don't count toward the alternation)
 - The timer survives closing/reopening the app (the start time is saved)
+- Optional "Tempo máximo de mamada" (Baby tab, off by default): a feeding left
+  running is ended automatically at start + limit, even if the app was closed,
+  and marked in the history so it can be adjusted
 - History with method, side (when applicable), time, and duration of each feeding
 - Edit any past feeding (method, side, date, start time, duration) or delete it
 
@@ -59,11 +62,13 @@ server. The "Baby" tab has a Backup section to move data between devices or
 keep a copy:
 
 - **Export** downloads every record (profile, feedings, diapers, measurements,
-  checklist items and their taps) as a JSON file.
+  checklist items and their taps) and settings (the feeding time limit) as a
+  JSON file.
 - **Import** reads a JSON backup, shows how many records it found, and lets you
   choose how to bring them in:
   - **Add to existing** keeps what's on this device and adds the file's records
-    (the file's profile is only used if this device doesn't have one yet;
+    (the file's profile and feeding time limit are only used if this device
+    doesn't have them yet;
     checklist taps go to an existing item with the same title).
   - **Replace everything** erases all data on this device first, after a
     confirmation, then loads the file.

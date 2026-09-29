@@ -1,6 +1,7 @@
 import Dexie, { type EntityTable } from 'dexie'
 import type {
   ActiveFeeding,
+  AppSettings,
   BabyProfile,
   ChecklistItem,
   ChecklistLog,
@@ -17,6 +18,7 @@ export type BabyDb = Dexie & {
   measurements: EntityTable<Measurement, 'id'>
   checklistItems: EntityTable<ChecklistItem, 'id'>
   checklistLogs: EntityTable<ChecklistLog, 'id'>
+  settings: EntityTable<AppSettings, 'id'>
 }
 
 /** Declara o schema e as migrações. Exportado para os testes abrirem bancos isolados. */
@@ -69,6 +71,18 @@ export function createDb(name: string): BabyDb {
     measurements: '++id, date',
     checklistItems: '++id, order',
     checklistLogs: '++id, timestamp, [itemId+timestamp]',
+  })
+
+  // Preferências do app (tempo máximo de mamada). Só uma tabela nova.
+  db.version(4).stores({
+    profile: 'id',
+    feedings: '++id, startTime, side',
+    activeFeeding: 'id',
+    diapers: '++id, timestamp, type',
+    measurements: '++id, date',
+    checklistItems: '++id, order',
+    checklistLogs: '++id, timestamp, [itemId+timestamp]',
+    settings: 'id',
   })
 
   return db
