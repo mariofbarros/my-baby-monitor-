@@ -1,5 +1,13 @@
 import Dexie, { type EntityTable } from 'dexie'
-import type { ActiveFeeding, BabyProfile, DiaperChange, FeedingSession, Measurement } from './types'
+import type {
+  ActiveFeeding,
+  BabyProfile,
+  ChecklistItem,
+  ChecklistLog,
+  DiaperChange,
+  FeedingSession,
+  Measurement,
+} from './types'
 
 export type BabyDb = Dexie & {
   profile: EntityTable<BabyProfile, 'id'>
@@ -7,6 +15,8 @@ export type BabyDb = Dexie & {
   activeFeeding: EntityTable<ActiveFeeding, 'id'>
   diapers: EntityTable<DiaperChange, 'id'>
   measurements: EntityTable<Measurement, 'id'>
+  checklistItems: EntityTable<ChecklistItem, 'id'>
+  checklistLogs: EntityTable<ChecklistLog, 'id'>
 }
 
 /** Declara o schema e as migrações. Exportado para os testes abrirem bancos isolados. */
@@ -47,6 +57,19 @@ export function createDb(name: string): BabyDb {
           if (!f.method) f.method = 'breast'
         })
     })
+
+  // Checklist pessoal: só cria tabelas novas, os dados existentes não mudam.
+  // Cada toque vira um registro com horário, então o histórico por dia sai
+  // de uma consulta por intervalo, sem precisar "zerar" nada à meia-noite.
+  db.version(3).stores({
+    profile: 'id',
+    feedings: '++id, startTime, side',
+    activeFeeding: 'id',
+    diapers: '++id, timestamp, type',
+    measurements: '++id, date',
+    checklistItems: '++id, order',
+    checklistLogs: '++id, timestamp, [itemId+timestamp]',
+  })
 
   return db
 }

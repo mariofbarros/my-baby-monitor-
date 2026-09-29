@@ -60,14 +60,14 @@ export default function Settings() {
 
     if (mode === 'replace') {
       const confirmed = window.confirm(
-        'Isso vai apagar TODOS os dados atuais deste dispositivo (mamadas, fraldas, medições e perfil) ' +
+        'Isso vai apagar TODOS os dados atuais deste dispositivo (mamadas, fraldas, medições, checklist e perfil) ' +
           'e substituir pelos do arquivo importado.\n\nEssa ação não pode ser desfeita. Continuar?',
       )
       if (!confirmed) return
     }
 
     setImporting(true)
-    const { feedings, diapers, measurements } = pendingImport
+    const { feedings, diapers, measurements, checklistItems } = pendingImport
     try {
       await applyBackup(db, pendingImport, mode)
 
@@ -75,7 +75,8 @@ export default function Settings() {
         ok: true,
         message:
           (mode === 'replace' ? 'Base substituída: ' : 'Importado: ') +
-          `${feedings.length} mamada(s), ${diapers.length} fralda(s), ${measurements.length} medição(ões).`,
+          `${feedings.length} mamada(s), ${diapers.length} fralda(s), ${measurements.length} medição(ões), ` +
+          `${checklistItems.length} item(ns) do checklist.`,
       })
       setPendingImport(null)
     } catch (err) {
@@ -134,8 +135,9 @@ export default function Settings() {
           <div className="card" style={{ marginTop: 12 }}>
             <p style={{ fontWeight: 700, marginBottom: 4 }}>Como importar?</p>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-              {pendingImport.feedings.length} mamada(s), {pendingImport.diapers.length} fralda(s) e{' '}
-              {pendingImport.measurements.length} medição(ões) encontradas no arquivo.
+              {pendingImport.feedings.length} mamada(s), {pendingImport.diapers.length} fralda(s),{' '}
+              {pendingImport.measurements.length} medição(ões) e {pendingImport.checklistItems.length} item(ns) do
+              checklist encontrados no arquivo.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <button type="button" className="btn btn-primary" disabled={importing} onClick={() => runImport('add')}>

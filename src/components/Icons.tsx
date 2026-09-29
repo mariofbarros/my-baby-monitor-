@@ -76,3 +76,16 @@ export function PencilIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+export function ChecklistIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 6l1.5 1.5L8 5" />
+      <path d="M4 12l1.5 1.5L8 11" />
+      <path d="M4 18l1.5 1.5L8 17" />
+      <path d="M11 6h9" />
+      <path d="M11 12h9" />
+      <path d="M11 18h9" />
+    </svg>
+  )
+}

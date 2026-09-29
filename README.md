@@ -29,6 +29,16 @@ Works in a phone browser and can be installed to the Android home screen
 - Weight and height trend charts
 - Edit a past measurement (date, weight, height) or delete it
 
+**Checklist**
+- A personal list of daily actions (e.g. "Drink water", "Take vitamin") with
+  editable titles; items can be added, edited, and removed
+- Each item can have an optional daily goal (e.g. 8 times a day) and a
+  free-text note; the counter shows progress like 3/8 and turns green when
+  the day's goal is met
+- Tap + to count each time the action is done today, − to undo the last tap
+- Counts start over each calendar day; the last 7 days are shown in a small
+  history table
+
 **Dashboard**
 - Daily summary: last feeding (counted from when it ended), next breast, last diaper change, last measurement
 - Feeding and diaper charts for a selectable time range (today, yesterday, last
@@ -48,12 +58,13 @@ Everything is stored locally on the device (IndexedDB) — nothing is sent to a
 server. The "Baby" tab has a Backup section to move data between devices or
 keep a copy:
 
-- **Export** downloads every record (profile, feedings, diapers, measurements)
-  as a JSON file.
+- **Export** downloads every record (profile, feedings, diapers, measurements,
+  checklist items and their taps) as a JSON file.
 - **Import** reads a JSON backup, shows how many records it found, and lets you
   choose how to bring them in:
   - **Add to existing** keeps what's on this device and adds the file's records
-    (the file's profile is only used if this device doesn't have one yet).
+    (the file's profile is only used if this device doesn't have one yet;
+    checklist taps go to an existing item with the same title).
   - **Replace everything** erases all data on this device first, after a
     confirmation, then loads the file.
 

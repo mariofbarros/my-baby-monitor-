@@ -1,11 +1,12 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { DiaperIcon, FeedingIcon, GrowthIcon, HomeIcon, SettingsIcon } from './Icons'
+import { ChecklistIcon, DiaperIcon, FeedingIcon, GrowthIcon, HomeIcon, SettingsIcon } from './Icons'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Início', icon: HomeIcon, end: true },
   { to: '/feeding', label: 'Mamadas', icon: FeedingIcon, end: false },
-  { to: '/diapers', label: 'Fraldas', icon: DiaperIcon, end: false },
+  { to: '/checklist', label: 'Checklist', icon: ChecklistIcon, end: false },
   { to: '/growth', label: 'Crescimento', icon: GrowthIcon, end: false },
+  { to: '/diapers', label: 'Fraldas', icon: DiaperIcon, end: false },
   { to: '/settings', label: 'Bebê', icon: SettingsIcon, end: false },
 ]
 
