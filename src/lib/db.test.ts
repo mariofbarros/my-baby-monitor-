@@ -47,7 +47,7 @@ describe('migração v1 → v2', () => {
     const db = createDb(DB_NAME)
 
     await db.open()
-    expect(db.verno).toBe(3)
+    expect(db.verno).toBe(4)
     expect(await db.profile.get(1)).toEqual({ id: 1, name: 'Ana', birthDate: '2026-08-01' })
     expect(await db.diapers.toArray()).toEqual([{ id: 1, type: 'pee', timestamp: 6000 }])
     expect(await db.measurements.toArray()).toEqual([{ id: 1, date: '2026-08-10', weightGrams: 3500 }])
@@ -71,7 +71,7 @@ describe('migração v1 → v2', () => {
   it('cria um banco novo direto na versão atual', async () => {
     const db = createDb(DB_NAME)
     await db.open()
-    expect(db.verno).toBe(3)
+    expect(db.verno).toBe(4)
     expect(await db.feedings.count()).toBe(0)
     db.close()
   })
@@ -94,7 +94,7 @@ describe('migração v2 → v3 (checklist)', () => {
 
     const db = createDb(DB_NAME)
     await db.open()
-    expect(db.verno).toBe(3)
+    expect(db.verno).toBe(4)
     expect(await db.checklistItems.count()).toBe(0)
     expect(await db.checklistLogs.count()).toBe(0)
     expect(await db.profile.get(1)).toEqual({ id: 1, name: 'Ana', birthDate: '2026-08-01' })
@@ -102,6 +102,32 @@ describe('migração v2 → v3 (checklist)', () => {
       { id: 1, method: 'bottle', startTime: 1000, endTime: 2000, durationSeconds: 1 },
     ])
     expect(await db.diapers.toArray()).toEqual([{ id: 1, type: 'poop', timestamp: 3000 }])
+    db.close()
+  })
+})
+
+describe('migração v3 → v4 (preferências)', () => {
+  it('cria a tabela de preferências vazia, com o limite de mamada desligado', async () => {
+    const v3 = new Dexie(DB_NAME)
+    v3.version(3).stores({
+      profile: 'id',
+      feedings: '++id, startTime, side',
+      activeFeeding: 'id',
+      diapers: '++id, timestamp, type',
+      measurements: '++id, date',
+      checklistItems: '++id, order',
+      checklistLogs: '++id, timestamp, [itemId+timestamp]',
+    })
+    await v3.table('activeFeeding').put({ id: 1, method: 'breast', side: 'left', startTime: 5000 })
+    await v3.table('checklistItems').add({ title: 'Água', order: 0, createdAt: 1 })
+    v3.close()
+
+    const db = createDb(DB_NAME)
+    await db.open()
+    expect(db.verno).toBe(4)
+    expect(await db.settings.count()).toBe(0)
+    expect(await db.activeFeeding.get(1)).toEqual({ id: 1, method: 'breast', side: 'left', startTime: 5000 })
+    expect(await db.checklistItems.count()).toBe(1)
     db.close()
   })
 })

@@ -18,6 +18,8 @@ export interface FeedingSession {
   startTime: number // epoch ms
   endTime: number // epoch ms
   durationSeconds: number
+  /** Encerrada pelo app ao atingir o tempo máximo, e ainda não revisada pela pessoa. */
+  autoEnded?: true
 }
 
 export interface ActiveFeeding {
@@ -25,6 +27,13 @@ export interface ActiveFeeding {
   method: FeedingMethod
   side?: Side
   startTime: number // epoch ms
+}
+
+/** Preferências do app (singleton, id sempre 1). */
+export interface AppSettings {
+  id: number
+  /** Tempo máximo de mamada em minutos. Ausente = sem limite. */
+  maxFeedingMinutes?: number
 }
 
 export interface DiaperChange {

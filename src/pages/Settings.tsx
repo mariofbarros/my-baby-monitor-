@@ -2,6 +2,13 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState } from 'react'
 import { db } from '../lib/db'
 import { applyBackup, buildBackup, parseBackup, type ImportMode, type ParsedBackup } from '../lib/backup'
+import {
+  DEFAULT_MAX_FEEDING_MINUTES,
+  getMaxFeedingMinutes,
+  MAX_FEEDING_MINUTES_UPPER,
+  normalizeMaxFeedingMinutes,
+  setMaxFeedingMinutes,
+} from '../lib/feedingLimit'
 import { ageLabel, todayIso } from '../lib/time'
 
 type ImportResult = { ok: boolean; message: string }
@@ -108,6 +115,8 @@ export default function Settings() {
           </button>
         </form>
 
+        <FeedingLimitSetting />
+
         <p className="section-title">Backup</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <button type="button" className="btn btn-outline" style={{ width: '100%' }} onClick={handleExport}>
@@ -180,5 +189,64 @@ export default function Settings() {
         </p>
       </div>
     </div>
+  )
+}
+
+/** "Tempo máximo de mamada": encerra sozinho o cronômetro esquecido ligado. */
+function FeedingLimitSetting() {
+  // null enquanto carrega, para não piscar o campo desligado.
+  const maxMinutes = useLiveQuery(async () => (await getMaxFeedingMinutes(db)) ?? 0, [], null)
+  const enabled = !!maxMinutes
+  // Texto em edição; null mostra o valor salvo.
+  const [draft, setDraft] = useState<string | null>(null)
+
+  if (maxMinutes === null) return null
+
+  const shown = draft ?? String(maxMinutes)
+  const draftValid = normalizeMaxFeedingMinutes(shown) != null
+
+  return (
+    <>
+      <p className="section-title">Mamadas</p>
+      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <label className="switch-row">
+          <span style={{ fontWeight: 600 }}>Tempo máximo de mamada</span>
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(e) => setMaxFeedingMinutes(db, e.target.checked ? DEFAULT_MAX_FEEDING_MINUTES : undefined)}
+          />
+        </label>
+        {enabled && (
+          <div>
+            <label htmlFor="maxFeedingMinutes">Minutos</label>
+            <input
+              id="maxFeedingMinutes"
+              type="number"
+              inputMode="numeric"
+              min="1"
+              max={MAX_FEEDING_MINUTES_UPPER}
+              value={shown}
+              onChange={(e) => {
+                setDraft(e.target.value)
+                const value = normalizeMaxFeedingMinutes(e.target.value)
+                if (value != null) void setMaxFeedingMinutes(db, value)
+              }}
+              onBlur={() => setDraft(null)}
+            />
+            {!draftValid && (
+              <p style={{ fontSize: 12, color: 'var(--danger)', marginTop: 6 }}>
+                Use um número inteiro de 1 a {MAX_FEEDING_MINUTES_UPPER}.
+              </p>
+            )}
+          </div>
+        )}
+        <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          {enabled
+            ? `Se você esquecer de finalizar, a mamada é encerrada sozinha com ${maxMinutes} min e fica marcada no histórico para você ajustar.`
+            : 'Desligado. Ligue para o cronômetro não continuar contando se você esquecer de finalizar a mamada.'}
+        </p>
+      </div>
+    </>
   )
 }

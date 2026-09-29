@@ -1,16 +1,26 @@
 import { normalizeGoal, normalizeNote } from './checklist'
 import type { BabyDb } from './db'
+import { normalizeMaxFeedingMinutes } from './feedingLimit'
 import { todayIso } from './time'
 import type { DiaperType, FeedingMethod, Side } from './types'
 
 export type ParsedBackup = {
-  feedings: { method: FeedingMethod; side?: Side; startTime: number; endTime: number; durationSeconds: number }[]
+  feedings: {
+    method: FeedingMethod
+    side?: Side
+    startTime: number
+    endTime: number
+    durationSeconds: number
+    autoEnded?: true
+  }[]
   diapers: { type: DiaperType; timestamp: number }[]
   measurements: { date: string; weightGrams?: number; heightCm?: number }[]
   profile: { name: string; birthDate?: string } | null
   /** `id` é o do aparelho de origem; só serve para ligar os toques ao item. */
   checklistItems: { id: number; title: string; goal?: number; note?: string; order: number; createdAt: number }[]
   checklistLogs: { itemId: number; timestamp: number }[]
+  /** Preferências; null quando o arquivo não traz nenhuma (backups antigos). */
+  settings: { maxFeedingMinutes?: number } | null
 }
 
 export type ImportMode = 'add' | 'replace'
@@ -21,13 +31,14 @@ const DIAPER_TYPES: DiaperType[] = ['pee', 'poop', 'both']
 
 /** Monta o objeto que vai para o arquivo JSON de backup. */
 export async function buildBackup(db: BabyDb) {
-  const [profile, feedings, diapers, measurements, checklistItems, checklistLogs] = await Promise.all([
+  const [profile, feedings, diapers, measurements, checklistItems, checklistLogs, settings] = await Promise.all([
     db.profile.get(1),
     db.feedings.toArray(),
     db.diapers.toArray(),
     db.measurements.toArray(),
     db.checklistItems.toArray(),
     db.checklistLogs.toArray(),
+    db.settings.get(1),
   ])
   return {
     profile,
@@ -36,6 +47,7 @@ export async function buildBackup(db: BabyDb) {
     measurements,
     checklistItems,
     checklistLogs,
+    settings: { maxFeedingMinutes: settings?.maxFeedingMinutes },
     exportedAt: new Date().toISOString(),
   }
 }
@@ -69,6 +81,7 @@ export function parseBackup(parsed: unknown): ParsedBackup {
         startTime: r.startTime,
         endTime: r.endTime,
         durationSeconds: r.durationSeconds,
+        ...(r.autoEnded === true ? { autoEnded: true as const } : {}),
       }
     })
     .filter((f): f is ParsedBackup['feedings'][number] => f !== null)
@@ -116,6 +129,12 @@ export function parseBackup(parsed: unknown): ParsedBackup {
     )
     .map((l) => ({ itemId: l.itemId, timestamp: l.timestamp }))
 
+  const rawSettings = data.settings as Record<string, unknown> | null | undefined
+  const settings =
+    rawSettings && typeof rawSettings === 'object'
+      ? { maxFeedingMinutes: normalizeMaxFeedingMinutes(rawSettings.maxFeedingMinutes) }
+      : null
+
   if (
     feedings.length === 0 &&
     diapers.length === 0 &&
@@ -126,13 +145,13 @@ export function parseBackup(parsed: unknown): ParsedBackup {
     throw new Error('nenhum dado reconhecível')
   }
 
-  return { feedings, diapers, measurements, profile, checklistItems, checklistLogs }
+  return { feedings, diapers, measurements, profile, checklistItems, checklistLogs, settings }
 }
 
 /** Grava um backup validado no banco, somando aos dados atuais ou substituindo tudo. */
 export async function applyBackup(db: BabyDb, backup: ParsedBackup, mode: ImportMode): Promise<void> {
-  const { feedings, diapers, measurements, profile: importedProfile, checklistItems, checklistLogs } = backup
-  const tables = [db.feedings, db.diapers, db.measurements, db.profile, db.checklistItems, db.checklistLogs]
+  const { feedings, diapers, measurements, profile: importedProfile, checklistItems, checklistLogs, settings } = backup
+  const tables = [db.feedings, db.diapers, db.measurements, db.profile, db.checklistItems, db.checklistLogs, db.settings]
   await db.transaction('rw', tables, async () => {
     if (mode === 'replace') {
       await Promise.all(tables.map((t) => t.clear()))
@@ -144,6 +163,7 @@ export async function applyBackup(db: BabyDb, backup: ParsedBackup, mode: Import
         startTime: f.startTime,
         endTime: f.endTime,
         durationSeconds: f.durationSeconds,
+        ...(f.autoEnded ? { autoEnded: true as const } : {}),
       })
     }
     for (const d of diapers) {
@@ -176,6 +196,13 @@ export async function applyBackup(db: BabyDb, backup: ParsedBackup, mode: Import
     }
     for (const l of checklistLogs) {
       await db.checklistLogs.add({ itemId: newIdBySourceId.get(l.itemId)!, timestamp: l.timestamp })
+    }
+
+    // Preferências seguem a mesma regra do perfil: "substituir" adota as do
+    // arquivo; "adicionar" só preenche o que ainda não foi configurado aqui.
+    const currentLimit = (await db.settings.get(1))?.maxFeedingMinutes
+    if (settings?.maxFeedingMinutes != null && (mode === 'replace' || currentLimit == null)) {
+      await db.settings.put({ id: 1, maxFeedingMinutes: settings.maxFeedingMinutes })
     }
 
     if (mode === 'replace') {

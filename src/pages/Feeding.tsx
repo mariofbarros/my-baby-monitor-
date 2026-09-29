@@ -300,8 +300,15 @@ function FeedingRow({ feeding, onDelete }: { feeding: FeedingSession; onDelete: 
       startTime,
       endTime,
       durationSeconds,
+      // Depois de revisada, a mamada deixa de ser "encerrada automaticamente".
+      autoEnded: undefined,
     })
     setEditing(false)
+  }
+
+  async function dismissAutoEnded() {
+    if (feeding.id == null) return
+    await db.feedings.update(feeding.id, { autoEnded: undefined })
   }
 
   if (editing) {
@@ -405,6 +412,14 @@ function FeedingRow({ feeding, onDelete }: { feeding: FeedingSession; onDelete: 
           <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
             {formatDateShort(feeding.startTime)} · {formatClock(feeding.startTime)}
           </p>
+          {feeding.autoEnded && (
+            <p style={{ fontSize: 12, color: 'var(--accent)', marginTop: 2 }}>
+              Encerrada no tempo máximo. Toque no lápis para ajustar.{' '}
+              <button type="button" className="link-btn" onClick={dismissAutoEnded}>
+                Ok
+              </button>
+            </p>
+          )}
         </div>
       </div>
       <div className="row-actions">
